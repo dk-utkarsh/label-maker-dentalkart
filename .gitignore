@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+uploads/
+*.png
+*.jpg
+*.xlsx
+.env
+.claude/
