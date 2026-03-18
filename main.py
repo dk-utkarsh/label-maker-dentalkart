@@ -20,7 +20,11 @@ from barcode.writer import ImageWriter
 
 app = FastAPI(title="Label Generator")
 
-UPLOAD_DIR = Path(__file__).parent / "uploads"
+# Use /tmp on Vercel (read-only filesystem), local uploads/ otherwise
+if os.environ.get("VERCEL"):
+    UPLOAD_DIR = Path("/tmp/uploads")
+else:
+    UPLOAD_DIR = Path(__file__).parent / "uploads"
 UPLOAD_DIR.mkdir(exist_ok=True)
 
 # ──────────────────────────────────────────────
