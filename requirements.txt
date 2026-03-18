@@ -4,3 +4,4 @@ python-multipart
 openpyxl
 reportlab
 Pillow
+python-barcode
