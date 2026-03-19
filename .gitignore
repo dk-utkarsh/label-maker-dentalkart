@@ -6,3 +6,4 @@ uploads/
 *.xlsx
 .env
 .claude/
+venv/

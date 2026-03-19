@@ -7,12 +7,13 @@ from pathlib import Path
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from fastapi.responses import HTMLResponse, StreamingResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
-from reportlab.lib.units import mm
+from reportlab.lib.units import mm, inch
 from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
 from reportlab.lib.utils import ImageReader
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
+from reportlab.graphics.barcode import code128
 from openpyxl import load_workbook
 from PIL import Image
 import barcode
@@ -232,87 +233,6 @@ def generate_zip(rows, fields, width_mm, height_mm, logo_path, filename_field, b
     )
 
 
-def get_field_font_size(field, h, role_default):
-    """Compute font size for a field based on its fontSize setting."""
-    size_mult = {"xs": 0.55, "sm": 0.7, "md": 1.0, "lg": 1.3, "xl": 1.6}
-    fs = field.get("fontSize", "auto")
-    if fs == "auto" or fs not in size_mult:
-        return role_default
-    return role_default * size_mult[fs]
-
-
-def format_field_value(field, val):
-    """Apply prefix, suffix, uppercase to value."""
-    v = str(val)
-    if field.get("uppercase"):
-        v = v.upper()
-    prefix = field.get("prefix", "")
-    suffix = field.get("suffix", "")
-    return f"{prefix}{v}{suffix}"
-
-
-def draw_aligned(c, text, x_start, cursor_y, inner_w, align, font_name, font_size):
-    """Draw text with alignment."""
-    if align == "center":
-        tw = c.stringWidth(text, font_name, font_size)
-        c.drawString(x_start + (inner_w - tw) / 2, cursor_y, text)
-    elif align == "right":
-        tw = c.stringWidth(text, font_name, font_size)
-        c.drawString(x_start + inner_w - tw, cursor_y, text)
-    else:
-        c.drawString(x_start, cursor_y, text)
-
-
-def group_into_rows(fields):
-    """Group consecutive fields by sameRow flag into visual rows."""
-    rows = []
-    for f in fields:
-        if f.get("sameRow") and rows:
-            rows[-1].append(f)
-        else:
-            rows.append([f])
-    return rows
-
-
-def draw_field_text(c, field, row_data, x, y, cell_w, fs, role_default_fs):
-    """Draw a single field's text at position. Returns height used."""
-    col = field["column"]
-    val = row_data.get(col, "")
-    if not val:
-        val = ""
-
-    actual_fs = get_field_font_size(field, 0, fs) if fs else role_default_fs
-    is_bold = field.get("bold", False)
-    font_name = "Helvetica-Bold" if is_bold else "Helvetica"
-    show_label = field.get("showLabel", True)
-    align = field.get("align", "left")
-
-    display_val = format_field_value(field, val) if val else ""
-
-    if show_label and val:
-        text = f"{col}: {display_val}"
-    elif val:
-        text = display_val
-    else:
-        text = f"{col}: —"
-
-    c.setFont(font_name, actual_fs)
-    c.setFillColorRGB(0, 0, 0)
-    lines = wrap_text(c, text, cell_w, font_name, actual_fs)
-    line = lines[0] if lines else ""
-
-    if show_label and line.startswith(f"{col}: ") and align == "left":
-        label_part = f"{col}: "
-        c.setFont("Helvetica-Bold", actual_fs)
-        lw = c.stringWidth(label_part, "Helvetica-Bold", actual_fs)
-        c.drawString(x, y, label_part)
-        c.setFont(font_name, actual_fs)
-        c.drawString(x + lw, y, line[len(label_part):])
-    else:
-        draw_aligned(c, line, x, y, cell_w, align, font_name, actual_fs)
-
-    return actual_fs
-
 
 def generate_barcode_image(value):
     """Generate a barcode image from a value and return as PIL Image."""
@@ -327,186 +247,145 @@ def generate_barcode_image(value):
         return None
 
 
-def draw_label(c, row_data, fields, w, h, w_mm, h_mm, logo_path, barcode_field="", banner_text=""):
-    """Draw a single label on the canvas."""
-    border_w = max(0.3 * mm, w * 0.004)
-    pad = max(1.5 * mm, min(w, h) * 0.04)
+def draw_label(c, data, field_config, width, height, w_mm, h_mm, logo_path, barcode_field="", banner_text=""):
+    """Draw a single label on the canvas with high precision matching the web preview."""
+    # Match index.html padding (Math.max(8, wPx * 0.045))
+    # Note: frontend width in px is w_mm * scale. We use points (mm * 2.83)
+    pad = max(8, width * 0.045)
+    
+    cursor = [height - pad]
+    x_offset = pad
+    content_width = width - (2 * pad)
+    
+    # Font scale factor to match browser rendering
+    FONT_SCALE = 0.82
 
-    c.setStrokeColorRGB(0.2, 0.2, 0.2)
-    c.setLineWidth(border_w)
-    c.rect(border_w / 2, border_w / 2, w - border_w, h - border_w)
+    def get_font_pt(role, size_str="auto"):
+        base = 10
+        if role == "title": base = 13
+        if role == "footer": base = 8
+        scales = {"xs": 0.7, "sm": 0.85, "md": 1.0, "lg": 1.25, "xl": 1.6, "auto": 1.0}
+        return base * scales.get(size_str, 1.0) * FONT_SCALE
 
-    inner_w = w - 2 * pad
-    x_start = pad
-    y_top = h - pad
-
-    base_font = max(2 * mm, h * 0.04)
-    title_font = max(2.5 * mm, h * 0.06)
-    footer_font = max(1.5 * mm, h * 0.03)
-    line_gap = base_font * 0.4
-    cell_pad = max(0.8 * mm, h * 0.012)
-
-    cursor_y = y_top
-
-    # ── Logo ──
-    if logo_path and logo_path.exists():
+    # Logo
+    if logo_path and os.path.exists(logo_path):
         try:
-            img = ImageReader(str(logo_path))
-            iw, ih = img.getSize()
-            max_logo_w = inner_w * 0.30
-            max_logo_h = (h - 2 * pad) * 0.15
-            sc = min(max_logo_w / iw, max_logo_h / ih)
-            draw_w = iw * sc
-            draw_h = ih * sc
-            c.drawImage(str(logo_path), x_start, cursor_y - draw_h,
-                        width=draw_w, height=draw_h,
-                        preserveAspectRatio=True, mask='auto')
-            cursor_y -= draw_h + line_gap
-        except Exception:
-            pass
+            img = Image.open(logo_path)
+            img_w, img_h = img.size
+            max_w = content_width * 0.35
+            max_h = height * 0.16
+            scale = min(max_w/img_w, max_h/img_h)
+            draw_w, draw_h = img_w * scale, img_h * scale
+            c.drawImage(logo_path, x_offset, cursor[0] - draw_h, width=draw_w, height=draw_h, mask='auto', preserveAspectRatio=True)
+            cursor[0] -= (draw_h + pad * 0.5)
+        except: pass
+    else:
+        cursor[0] -= (pad * 0.4)
 
-    title_fields = [f for f in fields if f["role"] == "title"]
-    body_fields = [f for f in fields if f["role"] == "body"]
-    footer_fields = [f for f in fields if f["role"] == "footer"]
+    active = [f for f in field_config if f.get("role") != "hidden"]
+    titles = [f for f in active if f.get("role") == "title"]
+    bodies = [f for f in active if f.get("role") == "body"]
+    footers = [f for f in active if f.get("role") == "footer"]
 
-    def draw_field_rows(field_list, default_fs):
-        nonlocal cursor_y
-        rows = group_into_rows(field_list)
-        for visual_row in rows:
-            n = len(visual_row)
-            any_border = any(f.get("border") for f in visual_row)
-
-            if n == 1:
-                f = visual_row[0]
-                fs = get_field_font_size(f, h, default_fs)
-                row_h = fs + cell_pad * 2
-
-                if f.get("border"):
-                    cursor_y -= row_h
-                    if cursor_y < pad:
-                        break
-                    c.setStrokeColorRGB(0.6, 0.6, 0.6)
-                    c.setLineWidth(0.3 * mm)
-                    c.rect(x_start, cursor_y, inner_w, row_h)
-                    draw_field_text(c, f, row_data, x_start + cell_pad, cursor_y + cell_pad, inner_w - cell_pad * 2, fs, default_fs)
-                    cursor_y -= line_gap * 0.3
+    def draw_field_group(fields, role):
+        if not fields: return
+        
+        rows = []
+        curr_row = []
+        for f in fields:
+            if not f.get("sameRow") and curr_row:
+                rows.append(curr_row)
+                curr_row = []
+            curr_row.append(f)
+        if curr_row: rows.append(curr_row)
+        
+        for row_fields in rows:
+            # Filter fields with content or border
+            row_fields = [f for f in row_fields if data.get(f['column']) or f.get('border')]
+            if not row_fields: continue
+            
+            max_fs = max([get_font_pt(role, f.get("fontSize", "auto")) for f in row_fields])
+            line_h = max_fs * 1.35
+            row_h = line_h + (4 if any(f.get("border") for f in row_fields) else 0)
+            
+            if cursor[0] - row_h < pad: break
+            
+            cell_w = content_width / len(row_fields)
+            any_border = any(f.get("border") for f in row_fields)
+            
+            for i, f in enumerate(row_fields):
+                val = str(data.get(f['column'], ""))
+                if not val and not f.get("border"): continue
+                
+                fs = get_font_pt(role, f.get("fontSize", "auto"))
+                align = f.get("align", "left")
+                if val: val = f.get("prefix", "") + val + f.get("suffix", "")
+                if f.get("uppercase"): val = val.upper()
+                if val and f.get("showLabel"): val = f['column'] + ": " + val
+                
+                x = x_offset + (i * cell_w)
+                
+                if f.get("border") or any_border:
+                    c.setStrokeColorRGB(0.8, 0.8, 0.8)
+                    c.setLineWidth(0.5)
+                    c.rect(x, cursor[0] - row_h, cell_w, row_h, stroke=1, fill=0)
+                    draw_x = x + 4
+                    draw_y = cursor[0] - row_h + (row_h - fs)/2 + 1
+                    target_w = cell_w - 8
                 else:
-                    cursor_y -= fs
-                    if cursor_y < pad:
-                        break
-                    draw_field_text(c, f, row_data, x_start, cursor_y, inner_w, fs, default_fs)
-                    cursor_y -= line_gap
-            else:
-                # Multiple fields on same row
-                fs_list = [get_field_font_size(f, h, default_fs) for f in visual_row]
-                max_fs = max(fs_list)
-                row_h = max_fs + cell_pad * 2
-                cell_w = inner_w / n
+                    draw_x = x
+                    draw_y = cursor[0] - max_fs
+                    target_w = cell_w
+                
+                c.setFont("Helvetica-Bold" if role=="title" or f.get("bold") else "Helvetica", fs)
+                c.setFillColorRGB(0,0,0)
+                
+                if align == "center": c.drawCentredString(draw_x + target_w/2, draw_y, val)
+                elif align == "right": c.drawRightString(draw_x + target_w, draw_y, val)
+                else: c.drawString(draw_x, draw_y, val)
+                
+            cursor[0] -= (row_h + (0 if any_border else 2))
 
-                cursor_y -= row_h
-                if cursor_y < pad:
-                    break
+    # 1. Titles
+    draw_field_group(titles, "title")
+    
+    # 2. Barcode
+    if barcode_field and data.get(barcode_field):
+        try:
+            bc_val = str(data.get(barcode_field))
+            bc_h = height * 0.12
+            bc = code128.Code128(bc_val, barHeight=bc_h, barWidth=1.2)
+            bc_draw_w = bc.width
+            bc.drawOn(c, (width - bc_draw_w)/2, cursor[0] - bc_h)
+            cursor[0] -= (bc_h + pad * 0.4)
+        except: pass
 
-                for idx, f in enumerate(visual_row):
-                    cx = x_start + idx * cell_w
-                    fs = fs_list[idx]
+    # 3. Bodies
+    draw_field_group(bodies, "body")
+    
+    # 4. Footers
+    if footers:
+        has_content = any(data.get(f['column']) or f.get('border') for f in footers)
+        if has_content:
+            footer_area_h = sum([get_font_pt("footer", f.get("fontSize", "auto")) * 1.5 for f in footers]) + pad
+            if cursor[0] > pad + footer_area_h:
+                cursor[0] = pad + footer_area_h
+            
+            if not any(f.get("border") for f in footers):
+                c.setStrokeColorRGB(0.9, 0.9, 0.9)
+                c.line(pad, cursor[0] + 2, width-pad, cursor[0] + 2)
+            draw_field_group(footers, "footer")
 
-                    if f.get("border") or any_border:
-                        c.setStrokeColorRGB(0.6, 0.6, 0.6)
-                        c.setLineWidth(0.3 * mm)
-                        c.rect(cx, cursor_y, cell_w, row_h)
-                        draw_field_text(c, f, row_data, cx + cell_pad, cursor_y + cell_pad, cell_w - cell_pad * 2, fs, default_fs)
-                    else:
-                        draw_field_text(c, f, row_data, cx, cursor_y + cell_pad, cell_w - cell_pad, fs, default_fs)
-
-                cursor_y -= line_gap * 0.3
-
-    # ── Titles ──
-    draw_field_rows(title_fields, title_font)
-    if title_fields:
-        cursor_y -= line_gap * 0.5
-
-    # ── Barcode ──
-    if barcode_field and barcode_field in row_data and row_data[barcode_field]:
-        bc_img = generate_barcode_image(row_data[barcode_field])
-        if bc_img:
-            try:
-                bc_buf = io.BytesIO()
-                bc_img.save(bc_buf, format='PNG')
-                bc_buf.seek(0)
-                bc_reader = ImageReader(bc_buf)
-                bc_w, bc_h = bc_img.size
-                max_bc_w = inner_w * 0.75
-                max_bc_h = h * 0.1
-                sc = min(max_bc_w / bc_w, max_bc_h / bc_h)
-                draw_bc_w = bc_w * sc
-                draw_bc_h = bc_h * sc
-                bc_x = x_start + (inner_w - draw_bc_w) / 2
-                cursor_y -= draw_bc_h
-                if cursor_y > pad:
-                    c.drawImage(bc_reader, bc_x, cursor_y,
-                                width=draw_bc_w, height=draw_bc_h,
-                                preserveAspectRatio=True, mask='auto')
-                cursor_y -= line_gap * 0.5
-            except Exception:
-                pass
-
-    # ── Body ──
-    draw_field_rows(body_fields, base_font)
-
-    # ── Footer separator ──
-    any_footer_border = any(f.get("border") for f in footer_fields)
-    if footer_fields and not any_footer_border and cursor_y > pad + footer_font * 2:
-        cursor_y -= line_gap
-        c.setStrokeColorRGB(0.7, 0.7, 0.7)
-        c.setLineWidth(0.3 * mm)
-        c.line(x_start, cursor_y, x_start + inner_w, cursor_y)
-        cursor_y -= line_gap
-
-    # ── Footers ──
-    c.setFillColorRGB(0.3, 0.3, 0.3)
-    draw_field_rows(footer_fields, footer_font)
-
-    # ── Banner ──
+    # 5. Banner
     if banner_text:
-        banner_h = max(2.5 * mm, h * 0.045)
-        banner_fs = max(1.5 * mm, banner_h * 0.5)
-        c.setFillColorRGB(0.07, 0.07, 0.07)
-        c.rect(border_w, border_w, w - 2 * border_w, banner_h, fill=1, stroke=0)
+        banner_fs = max(6, height * 0.025)
+        c.setFillColorRGB(0.06, 0.06, 0.06)
+        c.rect(0, 0, width, banner_fs * 2, stroke=0, fill=1)
         c.setFillColorRGB(1, 1, 1)
         c.setFont("Helvetica-Bold", banner_fs)
-        tw = c.stringWidth(banner_text, "Helvetica-Bold", banner_fs)
-        c.drawString((w - tw) / 2, border_w + (banner_h - banner_fs) / 2, banner_text)
-
+        c.drawCentredString(width/2, banner_fs * 0.6, banner_text.upper())
     c.setFillColorRGB(0, 0, 0)
-
-
-def wrap_text(c, text, max_width, font_name, font_size):
-    """Wrap text to fit within max_width. Returns list of lines."""
-    words = text.split()
-    lines = []
-    current_line = ""
-
-    for word in words:
-        test = f"{current_line} {word}".strip()
-        if c.stringWidth(test, font_name, font_size) <= max_width:
-            current_line = test
-        else:
-            if current_line:
-                lines.append(current_line)
-            # If single word is too wide, truncate it
-            if c.stringWidth(word, font_name, font_size) > max_width:
-                while c.stringWidth(word + "..", font_name, font_size) > max_width and len(word) > 1:
-                    word = word[:-1]
-                word += ".."
-            current_line = word
-
-    if current_line:
-        lines.append(current_line)
-
-    return lines if lines else [""]
-
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=5050, reload=True)
+    uvicorn.run("main:app", host="0.0.0.0", port=5050, reload=True)
