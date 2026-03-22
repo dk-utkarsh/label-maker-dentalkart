@@ -41,7 +41,6 @@ yarn-error.log*
 next-env.d.ts
 
 # legacy python
-legacy/venv/
-legacy/uploads/
+legacy/
 __pycache__/
 *.pyc

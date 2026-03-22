@@ -1,7 +1,0 @@
-fastapi
-uvicorn[standard]
-python-multipart
-openpyxl
-reportlab
-Pillow
-python-barcode
