@@ -1,0 +1,108 @@
+@import "tailwindcss";
+
+@theme {
+  --color-dk-orange: #E8922A;
+  --color-dk-orange-hover: #D47E1F;
+  --color-dk-orange-light: #FEF3E2;
+  --color-dk-blue: #2B7CB8;
+  --color-dk-blue-hover: #216BA3;
+  --color-dk-blue-light: #EBF5FC;
+
+  --color-gray-50: #f9fafb;
+  --color-gray-100: #f3f4f6;
+  --color-gray-200: #e5e7eb;
+  --color-gray-300: #d1d5db;
+  --color-gray-400: #9ca3af;
+  --color-gray-500: #6b7280;
+  --color-gray-600: #4b5563;
+  --color-gray-700: #374151;
+  --color-gray-800: #1f2937;
+  --color-gray-900: #111827;
+
+  --color-green-500: #22c55e;
+  --color-green-100: #dcfce7;
+  --color-red-500: #ef4444;
+  --color-red-100: #fee2e2;
+  --color-amber-500: #f59e0b;
+  --color-violet-400: #a78bfa;
+  --color-violet-500: #8b5cf6;
+}
+
+:root {
+  --background: #f0f4f8;
+  --foreground: #1a202c;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #d1d5db;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #9ca3af;
+}
+
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+/* Drag ghost styling */
+[draggable="true"] {
+  -webkit-user-drag: element;
+}
+
+/* Modal backdrop */
+.modal-backdrop {
+  animation: fadeIn 0.15s ease-out;
+}
+
+.modal-content {
+  animation: slideUp 0.2s ease-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(12px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* Progress bar */
+.progress-bar {
+  animation: progress 0.3s ease-out;
+}
+
+@keyframes progress {
+  from { width: 0%; }
+}
+
+/* Retro grid animation */
+@keyframes grid {
+  0% { transform: translateY(0); }
+  100% { transform: translateY(calc(var(--cell-size))); }
+}
+
+@utility animate-grid {
+  animation: grid 15s linear infinite;
+}

@@ -10,7 +10,7 @@ from fastapi.staticfiles import StaticFiles
 from reportlab.lib.units import mm, inch
 from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
-from reportlab.lib.utils import ImageReader
+from reportlab.lib.utils import ImageReader, simpleSplit
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.graphics.barcode import code128
@@ -272,8 +272,8 @@ def draw_label(c, data, field_config, width, height, w_mm, h_mm, logo_path, barc
         try:
             img = Image.open(logo_path)
             img_w, img_h = img.size
-            max_w = content_width * 0.35
-            max_h = height * 0.16
+            max_w = content_width * 0.30
+            max_h = height * 0.14
             scale = min(max_w/img_w, max_h/img_h)
             draw_w, draw_h = img_w * scale, img_h * scale
             c.drawImage(logo_path, x_offset, cursor[0] - draw_h, width=draw_w, height=draw_h, mask='auto', preserveAspectRatio=True)
@@ -293,58 +293,87 @@ def draw_label(c, data, field_config, width, height, w_mm, h_mm, logo_path, barc
         rows = []
         curr_row = []
         for f in fields:
-            if not f.get("sameRow") and curr_row:
-                rows.append(curr_row)
-                curr_row = []
-            curr_row.append(f)
+            if f.get("sameRow") and curr_row:
+                curr_row.append(f)
+            else:
+                if curr_row: rows.append(curr_row)
+                curr_row = [f]
         if curr_row: rows.append(curr_row)
         
         for row_fields in rows:
             # Filter fields with content or border
-            row_fields = [f for f in row_fields if data.get(f['column']) or f.get('border')]
-            if not row_fields: continue
+            active_row_fields = [f for f in row_fields if data.get(f['column']) or f.get('border')]
+            if not active_row_fields: continue
             
-            max_fs = max([get_font_pt(role, f.get("fontSize", "auto")) for f in row_fields])
-            line_h = max_fs * 1.35
-            row_h = line_h + (4 if any(f.get("border") for f in row_fields) else 0)
+            # 1. First, compute the required height of the row by wrapping each field
+            cell_w = content_width / len(active_row_fields)
+            row_data = [] # List of {lines: [], fs: pt, align: str, border: bool, ...}
             
-            if cursor[0] - row_h < pad: break
-            
-            cell_w = content_width / len(row_fields)
-            any_border = any(f.get("border") for f in row_fields)
-            
-            for i, f in enumerate(row_fields):
+            max_row_h = 0
+            any_row_border = any(f.get("border") for f in active_row_fields)
+
+            for f in active_row_fields:
                 val = str(data.get(f['column'], ""))
-                if not val and not f.get("border"): continue
-                
                 fs = get_font_pt(role, f.get("fontSize", "auto"))
-                align = f.get("align", "left")
-                if val: val = f.get("prefix", "") + val + f.get("suffix", "")
-                if f.get("uppercase"): val = val.upper()
-                if val and f.get("showLabel"): val = f['column'] + ": " + val
+                if val: 
+                    val = f.get("prefix", "") + val + f.get("suffix", "")
+                    if f.get("uppercase"): val = val.upper()
+                    if f.get("showLabel"): val = f['column'] + ": " + val
                 
-                x = x_offset + (i * cell_w)
+                # Check for border padding/margins
+                target_w = cell_w - (8 if f.get("border") or any_row_border else 0)
                 
-                if f.get("border") or any_border:
+                # Font metrics for wrapping
+                font_name = "Helvetica-Bold" if role=="title" or f.get("bold") else "Helvetica"
+                lines = simpleSplit(val, font_name, fs, target_w) if val else []
+                if not lines and (f.get("border") or any_row_border): lines = [""] # for placeholder borders
+                
+                lh = fs * 1.35
+                cell_h = len(lines) * lh + (4 if f.get("border") or any_row_border else 0)
+                max_row_h = max(max_row_h, cell_h)
+                
+                row_data.append({
+                    "lines": lines,
+                    "fs": fs,
+                    "font_name": font_name,
+                    "align": f.get("align", "left"),
+                    "border": f.get("border") or any_row_border,
+                    "cell_w": cell_w,
+                    "target_w": target_w,
+                    "line_h": lh
+                })
+            
+            if cursor[0] - max_row_h < pad: break
+            
+            # 2. Draw the row fields
+            curr_x = x_offset
+            for f_data in row_data:
+                # Border
+                if f_data["border"]:
                     c.setStrokeColorRGB(0.8, 0.8, 0.8)
                     c.setLineWidth(0.5)
-                    c.rect(x, cursor[0] - row_h, cell_w, row_h, stroke=1, fill=0)
-                    draw_x = x + 4
-                    draw_y = cursor[0] - row_h + (row_h - fs)/2 + 1
-                    target_w = cell_w - 8
-                else:
-                    draw_x = x
-                    draw_y = cursor[0] - max_fs
-                    target_w = cell_w
+                    c.rect(curr_x, cursor[0] - max_row_h, f_data["cell_w"], max_row_h, stroke=1, fill=0)
                 
-                c.setFont("Helvetica-Bold" if role=="title" or f.get("bold") else "Helvetica", fs)
+                # Text
+                c.setFont(f_data["font_name"], f_data["fs"])
                 c.setFillColorRGB(0,0,0)
                 
-                if align == "center": c.drawCentredString(draw_x + target_w/2, draw_y, val)
-                elif align == "right": c.drawRightString(draw_x + target_w, draw_y, val)
-                else: c.drawString(draw_x, draw_y, val)
+                # Center vertically? For now let's just draw from top like HTML
+                txt_y = cursor[0] - f_data["fs"] - (4 if f_data["border"] else 0)
+                draw_x_base = curr_x + (4 if f_data["border"] else 0)
                 
-            cursor[0] -= (row_h + (0 if any_border else 2))
+                for line in f_data["lines"]:
+                    if f_data["align"] == "center":
+                        c.drawCentredString(draw_x_base + f_data["target_w"]/2, txt_y, line)
+                    elif f_data["align"] == "right":
+                        c.drawRightString(draw_x_base + f_data["target_w"], txt_y, line)
+                    else:
+                        c.drawString(draw_x_base, txt_y, line)
+                    txt_y -= f_data["line_h"]
+                
+                curr_x += f_data["cell_w"]
+            
+            cursor[0] -= (max_row_h + (0 if any_row_border else pad * 0.15))
 
     # 1. Titles
     draw_field_group(titles, "title")
@@ -353,10 +382,13 @@ def draw_label(c, data, field_config, width, height, w_mm, h_mm, logo_path, barc
     if barcode_field and data.get(barcode_field):
         try:
             bc_val = str(data.get(barcode_field))
-            bc_h = height * 0.12
-            bc = code128.Code128(bc_val, barHeight=bc_h, barWidth=1.2)
+            bc_h = height * 0.10
+            bc = code128.Code128(bc_val, barHeight=bc_h, barWidth=1.5)
             bc_draw_w = bc.width
-            bc.drawOn(c, (width - bc_draw_w)/2, cursor[0] - bc_h)
+            c.saveState()
+            c.translate((width - bc_draw_w)/2, cursor[0] - bc_h)
+            bc.drawOn(c, 0, 0)
+            c.restoreState()
             cursor[0] -= (bc_h + pad * 0.4)
         except: pass
 
