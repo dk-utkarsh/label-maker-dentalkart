@@ -162,27 +162,28 @@ const saveLocalVariations = (variations: SavedVariation[]) => {
   }
 };
 
-// Fetch saved variations — localStorage first, API as backup/sync
+// Fetch saved variations — API (Vercel Blob) is primary shared source, localStorage is cache
 const fetchVariations = async (): Promise<SavedVariation[]> => {
-  const local = getLocalVariations();
   try {
     const res = await fetch('/api/variations');
     if (res.ok) {
       const remote: SavedVariation[] = await res.json();
-      if (remote.length > 0) {
-        // Merge: combine local + remote, deduplicate by id
-        const merged = new Map<string, SavedVariation>();
-        for (const v of remote) merged.set(v.id, v);
-        for (const v of local) merged.set(v.id, v);
-        const all = Array.from(merged.values()).sort((a, b) => a.timestamp - b.timestamp);
-        saveLocalVariations(all);
-        return all;
+      // Merge any local-only variations into remote (push them to API too)
+      const local = getLocalVariations();
+      const remoteIds = new Set(remote.map(v => v.id));
+      const localOnly = local.filter(v => !remoteIds.has(v.id));
+      const all = [...remote, ...localOnly].sort((a, b) => a.timestamp - b.timestamp);
+      saveLocalVariations(all);
+      // Sync local-only items to API
+      for (const v of localOnly) {
+        persistVariation(v);
       }
+      return all;
     }
   } catch {
-    // API unavailable — use local only
+    // API unavailable — fall back to localStorage
   }
-  return local;
+  return getLocalVariations();
 };
 
 const persistVariation = async (variation: SavedVariation) => {
