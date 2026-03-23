@@ -142,15 +142,47 @@ interface LabelState {
   };
 }
 
-// Fetch saved variations from server
-const fetchVariations = async (): Promise<SavedVariation[]> => {
+// localStorage helpers for variation persistence
+const LS_KEY = 'label-maker-variations';
+
+const getLocalVariations = (): SavedVariation[] => {
   try {
-    const res = await fetch('/api/variations');
-    if (!res.ok) return [];
-    return await res.json();
+    const raw = localStorage.getItem(LS_KEY);
+    return raw ? JSON.parse(raw) : [];
   } catch {
     return [];
   }
+};
+
+const saveLocalVariations = (variations: SavedVariation[]) => {
+  try {
+    localStorage.setItem(LS_KEY, JSON.stringify(variations));
+  } catch {
+    // Storage full or unavailable
+  }
+};
+
+// Fetch saved variations — localStorage first, API as backup/sync
+const fetchVariations = async (): Promise<SavedVariation[]> => {
+  const local = getLocalVariations();
+  try {
+    const res = await fetch('/api/variations');
+    if (res.ok) {
+      const remote: SavedVariation[] = await res.json();
+      if (remote.length > 0) {
+        // Merge: combine local + remote, deduplicate by id
+        const merged = new Map<string, SavedVariation>();
+        for (const v of remote) merged.set(v.id, v);
+        for (const v of local) merged.set(v.id, v);
+        const all = Array.from(merged.values()).sort((a, b) => a.timestamp - b.timestamp);
+        saveLocalVariations(all);
+        return all;
+      }
+    }
+  } catch {
+    // API unavailable — use local only
+  }
+  return local;
 };
 
 const persistVariation = async (variation: SavedVariation) => {
@@ -161,7 +193,7 @@ const persistVariation = async (variation: SavedVariation) => {
       body: JSON.stringify(variation),
     });
   } catch {
-    // Network error
+    // Network error — localStorage already has it
   }
 };
 
@@ -173,7 +205,7 @@ const deleteVariationFromServer = async (id: string) => {
       body: JSON.stringify({ id }),
     });
   } catch {
-    // Network error
+    // Network error — localStorage already updated
   }
 };
 
@@ -343,6 +375,7 @@ export const useStore = create<LabelState>((set, get) => ({
     };
     const updated = [...s.savedVariations, variation];
     set({ savedVariations: updated });
+    saveLocalVariations(updated);
     persistVariation(variation);
   },
 
@@ -379,6 +412,7 @@ export const useStore = create<LabelState>((set, get) => ({
   deleteVariation: (id) => {
     const updated = get().savedVariations.filter(v => v.id !== id);
     set({ savedVariations: updated });
+    saveLocalVariations(updated);
     deleteVariationFromServer(id);
   },
 
