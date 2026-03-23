@@ -5,6 +5,7 @@ export type FieldRole = 'title' | 'body' | 'footer' | 'hidden';
 export type FontSize = 'xs' | 'sm' | 'md' | 'lg' | 'xl' | 'auto';
 export type Alignment = 'left' | 'center' | 'right';
 export type LogoPosition = 'left' | 'center' | 'right';
+export type CodeType = 'none' | 'barcode' | 'qr';
 
 export interface FieldConfig {
   column: string;
@@ -25,6 +26,7 @@ export interface LabelOverride {
   barcodeField?: string;
   barcodeOrder?: number;
   barcodeSize?: number;
+  codeType?: CodeType;
   bannerText?: string;
   logo?: string | null;
   logoPosition?: LogoPosition;
@@ -40,6 +42,7 @@ export interface SavedVariation {
   barcodeField: string;
   barcodeOrder: number;
   barcodeSize: number;
+  codeType: CodeType;
   bannerText: string;
   logo: string | null;
   logoPosition: LogoPosition;
@@ -61,6 +64,7 @@ interface LabelState {
   barcodeField: string;
   barcodeOrder: number;
   barcodeSize: number;
+  codeType: CodeType;
   topRule: boolean;
   activeLayout: string;
   savedVariations: SavedVariation[];
@@ -80,6 +84,7 @@ interface LabelState {
   setBarcodeField: (field: string) => void;
   setBarcodeOrder: (order: number) => void;
   setBarcodeSize: (size: number) => void;
+  setCodeType: (type: CodeType) => void;
   reorderConfig: (from: number, to: number) => void;
   setTopRule: (v: boolean) => void;
   applyLayout: (presetId: string) => void;
@@ -95,6 +100,7 @@ interface LabelState {
     barcodeField: string;
     barcodeOrder: number;
     barcodeSize: number;
+    codeType: CodeType;
     bannerText: string;
     logo: string | null;
     logoPosition: LogoPosition;
@@ -151,6 +157,7 @@ export const useStore = create<LabelState>((set, get) => ({
   barcodeField: '',
   barcodeOrder: 0,
   barcodeSize: 100,
+  codeType: 'barcode' as CodeType,
   topRule: false,
   activeLayout: 'custom',
   savedVariations: [],
@@ -221,6 +228,15 @@ export const useStore = create<LabelState>((set, get) => ({
       set({ barcodeSize });
     }
   },
+  setCodeType: (codeType) => {
+    const s = get();
+    if (s.editingLabelIdx !== null) {
+      const override = s.labelOverrides[s.editingLabelIdx] || {};
+      set({ labelOverrides: { ...s.labelOverrides, [s.editingLabelIdx]: { ...override, codeType } } });
+    } else {
+      set({ codeType });
+    }
+  },
   reorderConfig: (from, to) => set((state) => {
     const newConfig = [...state.config];
     const [moved] = newConfig.splice(from, 1);
@@ -254,6 +270,7 @@ export const useStore = create<LabelState>((set, get) => ({
       barcodeField: s.barcodeField,
       barcodeOrder: s.barcodeOrder,
       barcodeSize: s.barcodeSize,
+      codeType: s.codeType,
       bannerText: s.bannerText,
       logo: s.logo,
       logoPosition: s.logoPosition,
@@ -326,6 +343,7 @@ export const useStore = create<LabelState>((set, get) => ({
         barcodeField: s.barcodeField,
         barcodeOrder: s.barcodeOrder,
         barcodeSize: s.barcodeSize,
+        codeType: s.codeType,
         bannerText: s.bannerText,
         logo: s.logo,
         logoPosition: s.logoPosition,
@@ -337,6 +355,7 @@ export const useStore = create<LabelState>((set, get) => ({
       barcodeField: override.barcodeField ?? s.barcodeField,
       barcodeOrder: override.barcodeOrder ?? s.barcodeOrder,
       barcodeSize: override.barcodeSize ?? s.barcodeSize,
+      codeType: override.codeType ?? s.codeType,
       bannerText: override.bannerText ?? s.bannerText,
       logo: override.logo !== undefined ? override.logo : s.logo,
       logoPosition: override.logoPosition ?? s.logoPosition,

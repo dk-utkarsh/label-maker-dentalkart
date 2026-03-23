@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useMemo } from 'react';
 import JsBarcode from 'jsbarcode';
+import QRCode from 'qrcode';
 import { useStore } from '@/lib/store';
 
 export default function LabelPreview({ overrideIdx }: { overrideIdx?: number } = {}) {
@@ -9,8 +10,9 @@ export default function LabelPreview({ overrideIdx }: { overrideIdx?: number } =
   const { width, height, data, previewIdx, topRule } = store;
   const idx = overrideIdx ?? previewIdx;
   const effective = store.getEffectiveConfig(idx);
-  const { config, logo, logoPosition, logoSize, bannerText, barcodeField, barcodeOrder, barcodeSize } = effective;
+  const { config, logo, logoPosition, logoSize, bannerText, barcodeField, barcodeOrder, barcodeSize, codeType } = effective;
   const barcodeRef = useRef<HTMLCanvasElement>(null);
+  const qrRef = useRef<HTMLCanvasElement>(null);
 
   const row = data[idx] || {};
   const activeFields = config.filter(f => f.role !== 'hidden');
@@ -43,11 +45,12 @@ export default function LabelPreview({ overrideIdx }: { overrideIdx?: number } =
     return base * (fontScales[f.fontSize] || 1);
   };
 
-  const hasBarcode = !!(barcodeField && row[barcodeField]);
+  const activeCodeType = codeType ?? 'barcode';
+  const hasCode = !!(barcodeField && row[barcodeField] && activeCodeType !== 'none');
 
   // Barcode section position
   const barcodeSection = useMemo(() => {
-    if (!hasBarcode) return null;
+    if (!hasCode) return null;
     let lastActiveRole = '';
     for (let i = 0; i < Math.min(barcodeOrder, config.length); i++) {
       if (config[i].role !== 'hidden') lastActiveRole = config[i].role;
@@ -56,10 +59,11 @@ export default function LabelPreview({ overrideIdx }: { overrideIdx?: number } =
     if (lastActiveRole === 'title') return 'after-title';
     if (lastActiveRole === 'body') return 'after-body';
     return 'after-footer';
-  }, [hasBarcode, barcodeOrder, config]);
+  }, [hasCode, barcodeOrder, config]);
 
+  // Render barcode
   useEffect(() => {
-    if (barcodeRef.current && hasBarcode) {
+    if (barcodeRef.current && hasCode && activeCodeType === 'barcode') {
       try {
         const scale = (barcodeSize ?? 100) / 100;
         JsBarcode(barcodeRef.current, String(row[barcodeField]), {
@@ -73,7 +77,20 @@ export default function LabelPreview({ overrideIdx }: { overrideIdx?: number } =
         console.error('Barcode error:', e);
       }
     }
-  }, [row, barcodeField, hasBarcode, hPx, wPx, barcodeSize]);
+  }, [row, barcodeField, hasCode, hPx, wPx, barcodeSize, activeCodeType]);
+
+  // Render QR code
+  useEffect(() => {
+    if (qrRef.current && hasCode && activeCodeType === 'qr') {
+      const scale = (barcodeSize ?? 100) / 100;
+      const qrSize = Math.max(30, Math.min(wPx, hPx) * 0.25 * scale);
+      QRCode.toCanvas(qrRef.current, String(row[barcodeField]), {
+        width: qrSize,
+        margin: 0,
+        color: { dark: '#000000', light: '#ffffff' },
+      }).catch(e => console.error('QR error:', e));
+    }
+  }, [row, barcodeField, hasCode, hPx, wPx, barcodeSize, activeCodeType]);
 
   if (!data.length) return null;
 
@@ -234,7 +251,7 @@ export default function LabelPreview({ overrideIdx }: { overrideIdx?: number } =
     });
   };
 
-  const barcodeElement = hasBarcode ? (
+  const codeElement = hasCode ? (
     <div
       style={{
         margin: `${sectionGap * 0.5}px 0`,
@@ -242,10 +259,14 @@ export default function LabelPreview({ overrideIdx }: { overrideIdx?: number } =
         justifyContent: 'center',
       }}
     >
-      <canvas
-        ref={barcodeRef}
-        style={{ maxWidth: `${Math.min(95, 85 * ((barcodeSize ?? 100) / 100))}%`, height: Math.max(10, hPx * 0.09 * ((barcodeSize ?? 100) / 100)) }}
-      />
+      {activeCodeType === 'barcode' ? (
+        <canvas
+          ref={barcodeRef}
+          style={{ maxWidth: `${Math.min(95, 85 * ((barcodeSize ?? 100) / 100))}%`, height: Math.max(10, hPx * 0.09 * ((barcodeSize ?? 100) / 100)) }}
+        />
+      ) : (
+        <canvas ref={qrRef} />
+      )}
     </div>
   ) : null;
 
@@ -316,7 +337,7 @@ export default function LabelPreview({ overrideIdx }: { overrideIdx?: number } =
         ) : null}
 
         {/* Barcode: before-title */}
-        {barcodeSection === 'before-title' && barcodeElement}
+        {barcodeSection === 'before-title' && codeElement}
 
         {/* Titles */}
         {titles.length > 0 && (
@@ -326,7 +347,7 @@ export default function LabelPreview({ overrideIdx }: { overrideIdx?: number } =
         )}
 
         {/* Barcode: after-title (default) */}
-        {barcodeSection === 'after-title' && barcodeElement}
+        {barcodeSection === 'after-title' && codeElement}
 
         {/* Body — takes remaining vertical space */}
         <div style={{ flex: 1 }}>
@@ -334,7 +355,7 @@ export default function LabelPreview({ overrideIdx }: { overrideIdx?: number } =
         </div>
 
         {/* Barcode: after-body */}
-        {barcodeSection === 'after-body' && barcodeElement}
+        {barcodeSection === 'after-body' && codeElement}
 
         {/* Footers — pinned to bottom */}
         {hasFooters && (
@@ -350,7 +371,7 @@ export default function LabelPreview({ overrideIdx }: { overrideIdx?: number } =
         )}
 
         {/* Barcode: after-footer */}
-        {barcodeSection === 'after-footer' && barcodeElement}
+        {barcodeSection === 'after-footer' && codeElement}
 
         {/* Banner — full-bleed bottom bar */}
         {hasBanner && (

@@ -10,13 +10,14 @@ type DisplayItem =
 
 export default function ConfigSidebar() {
   const store = useStore();
-  const { setConfig, updateField, setBarcodeField, setBarcodeOrder, setBarcodeSize, setBannerText, columns, editingLabelIdx, previewIdx } = store;
+  const { setConfig, updateField, setBarcodeField, setBarcodeOrder, setBarcodeSize, setCodeType, setBannerText, columns, editingLabelIdx, previewIdx } = store;
   const idx = editingLabelIdx ?? previewIdx;
   const effective = store.getEffectiveConfig(idx);
   const config = editingLabelIdx !== null ? effective.config : store.config;
   const barcodeField = editingLabelIdx !== null ? effective.barcodeField : store.barcodeField;
   const barcodeOrder = editingLabelIdx !== null ? effective.barcodeOrder : store.barcodeOrder;
   const barcodeSize = editingLabelIdx !== null ? effective.barcodeSize : store.barcodeSize;
+  const codeType = editingLabelIdx !== null ? effective.codeType : store.codeType;
   const bannerText = editingLabelIdx !== null ? effective.bannerText : store.bannerText;
   const [expandedField, setExpandedField] = useState<string | null>(null);
 
@@ -94,21 +95,51 @@ export default function ConfigSidebar() {
           <span>Extra Settings</span>
         </div>
         <div className="space-y-4">
+          {/* Code Type Toggle */}
           <div className="space-y-1.5">
-            <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Barcode Source</label>
-            <select
-              value={barcodeField}
-              onChange={(e) => setBarcodeField(e.target.value)}
-              className="w-full bg-gray-50 border border-gray-200 rounded-lg py-2 px-3 text-gray-800 focus:outline-none focus:ring-2 focus:ring-dk-blue/30 focus:border-dk-blue transition-all text-sm"
-            >
-              <option value="">None (No Barcode)</option>
-              {columns.map(col => <option key={col} value={col}>{col}</option>)}
-            </select>
+            <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Code Type</label>
+            <div className="flex gap-1 p-1 bg-gray-100 rounded-lg">
+              {([
+                { value: 'none' as const, label: 'None' },
+                { value: 'barcode' as const, label: 'Barcode' },
+                { value: 'qr' as const, label: 'QR Code' },
+              ]).map(({ value, label }) => (
+                <button
+                  key={value}
+                  onClick={() => setCodeType(value)}
+                  className={`flex-1 py-1.5 rounded-md text-xs font-bold transition-all ${
+                    codeType === value
+                      ? 'bg-white text-dk-blue shadow-sm'
+                      : 'text-gray-500 hover:text-gray-700'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
           </div>
-          {barcodeField && (
+
+          {/* Data Source — shown for barcode or QR */}
+          {codeType !== 'none' && (
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">
+                {codeType === 'qr' ? 'QR Code' : 'Barcode'} Source
+              </label>
+              <select
+                value={barcodeField}
+                onChange={(e) => setBarcodeField(e.target.value)}
+                className="w-full bg-gray-50 border border-gray-200 rounded-lg py-2 px-3 text-gray-800 focus:outline-none focus:ring-2 focus:ring-dk-blue/30 focus:border-dk-blue transition-all text-sm"
+              >
+                <option value="">Select Column</option>
+                {columns.map(col => <option key={col} value={col}>{col}</option>)}
+              </select>
+            </div>
+          )}
+
+          {codeType !== 'none' && barcodeField && (
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
-                <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Barcode Size</label>
+                <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">{codeType === 'qr' ? 'QR' : 'Barcode'} Size</label>
                 <span className="text-xs font-semibold text-gray-600">{barcodeSize ?? 100}%</span>
               </div>
               <input
