@@ -6,17 +6,21 @@ import UploadSection from '@/components/UploadSection';
 import ConfigSidebar from '@/components/ConfigSidebar';
 import LabelPreview from '@/components/LabelPreview';
 import LayoutSelector from '@/components/LayoutSelector';
-import { Download, ChevronLeft, ChevronRight, Save, Trash2, RotateCcw, Eye, Layers, X, CheckCircle, Loader2, FileSpreadsheet, Palette, Printer } from 'lucide-react';
+import { Download, ChevronLeft, ChevronRight, Save, Trash2, RotateCcw, Eye, Layers, X, CheckCircle, Loader2, FileSpreadsheet, Palette, Printer, Pencil, Globe, Undo2 } from 'lucide-react';
 import { HeroSection } from '@/components/ui/hero-section';
 
 export default function Home() {
-  const { data, previewIdx, setPreviewIdx, width, height, config, savedVariations, saveVariation, loadVariation, deleteVariation } = useStore();
+  const { data, previewIdx, setPreviewIdx, width, height, config, savedVariations, saveVariation, loadVariation, deleteVariation, fetchSavedVariations, editingLabelIdx, setEditingLabelIdx, labelOverrides, clearLabelOverride, getEffectiveConfig } = useStore();
   const [isGenerating, setIsGenerating] = useState(false);
   const [pdfProgress, setPdfProgress] = useState(0);
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [variationName, setVariationName] = useState('');
   const nameInputRef = useRef<HTMLInputElement>(null);
   const uploadRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    fetchSavedVariations();
+  }, [fetchSavedVariations]);
 
   useEffect(() => {
     if (showSaveModal && nameInputRef.current) {
@@ -48,6 +52,9 @@ export default function Home() {
 
       const previewEl = document.querySelector('.label-preview-container') as HTMLElement;
       if (!previewEl) throw new Error('Preview container not found');
+
+      // Exit per-label edit mode before generating
+      setEditingLabelIdx(null);
 
       for (let i = 0; i < data.length; i++) {
         setPreviewIdx(i);
@@ -222,9 +229,16 @@ export default function Home() {
                     {/* Preview Card */}
                     <div className="p-6 rounded-2xl bg-white border border-gray-200 shadow-sm flex flex-col items-center">
                       <div className="w-full flex items-center justify-between mb-6">
-                        <div className="flex items-center gap-2 text-dk-blue text-xs font-bold uppercase tracking-widest">
-                          <Eye size={14} />
-                          <span>Live Preview</span>
+                        <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 text-dk-blue text-xs font-bold uppercase tracking-widest">
+                            <Eye size={14} />
+                            <span>Live Preview</span>
+                          </div>
+                          {editingLabelIdx !== null && (
+                            <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 text-[10px] font-bold">
+                              Editing Label #{editingLabelIdx + 1}
+                            </span>
+                          )}
                         </div>
 
                         <div className="flex items-center gap-3">
@@ -256,16 +270,76 @@ export default function Home() {
                         </div>
                       </div>
 
-                      <button
-                        onClick={() => {
-                          setVariationName('');
-                          setShowSaveModal(true);
-                        }}
-                        className="mt-6 flex items-center gap-2 px-5 py-2.5 rounded-xl bg-dk-blue-light text-dk-blue text-xs font-bold hover:bg-dk-blue hover:text-white transition-all active:scale-95 border border-dk-blue/20 hover:border-dk-blue"
-                      >
-                        <Save size={14} />
-                        Save this variation
-                      </button>
+                      {/* Per-label edit controls */}
+                      <div className="mt-6 flex flex-wrap items-center gap-2">
+                        {editingLabelIdx === null ? (
+                          <button
+                            onClick={() => setEditingLabelIdx(previewIdx)}
+                            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-amber-50 text-amber-700 text-xs font-bold hover:bg-amber-100 transition-all active:scale-95 border border-amber-200"
+                          >
+                            <Pencil size={14} />
+                            Customize Label #{previewIdx + 1}
+                          </button>
+                        ) : (
+                          <>
+                            <button
+                              onClick={() => setEditingLabelIdx(null)}
+                              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-dk-blue-light text-dk-blue text-xs font-bold hover:bg-dk-blue hover:text-white transition-all active:scale-95 border border-dk-blue/20"
+                            >
+                              <Globe size={14} />
+                              Back to Global
+                            </button>
+                            {labelOverrides[editingLabelIdx] && (
+                              <button
+                                onClick={() => {
+                                  clearLabelOverride(editingLabelIdx);
+                                  setEditingLabelIdx(null);
+                                }}
+                                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-red-50 text-red-600 text-xs font-bold hover:bg-red-100 transition-all active:scale-95 border border-red-200"
+                              >
+                                <Undo2 size={14} />
+                                Reset to Global
+                              </button>
+                            )}
+                          </>
+                        )}
+
+                        <button
+                          onClick={() => {
+                            setVariationName('');
+                            setShowSaveModal(true);
+                          }}
+                          className="flex items-center gap-2 px-4 py-2 rounded-xl bg-dk-blue-light text-dk-blue text-xs font-bold hover:bg-dk-blue hover:text-white transition-all active:scale-95 border border-dk-blue/20 hover:border-dk-blue"
+                        >
+                          <Save size={14} />
+                          Save variation
+                        </button>
+                      </div>
+
+                      {/* Show which labels have overrides */}
+                      {Object.keys(labelOverrides).length > 0 && (
+                        <div className="mt-3 px-3 py-2 rounded-lg bg-amber-50 border border-amber-200">
+                          <p className="text-[10px] font-bold text-amber-700 uppercase tracking-widest mb-1">Customized Labels</p>
+                          <div className="flex flex-wrap gap-1">
+                            {Object.keys(labelOverrides).map(k => {
+                              const i = Number(k);
+                              return (
+                                <button
+                                  key={i}
+                                  onClick={() => { setPreviewIdx(i); setEditingLabelIdx(i); }}
+                                  className={`px-2 py-0.5 rounded text-[10px] font-bold transition-colors ${
+                                    editingLabelIdx === i
+                                      ? 'bg-amber-500 text-white'
+                                      : 'bg-amber-100 text-amber-700 hover:bg-amber-200'
+                                  }`}
+                                >
+                                  #{i + 1}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>

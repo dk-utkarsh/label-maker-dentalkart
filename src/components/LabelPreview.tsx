@@ -4,11 +4,15 @@ import { useEffect, useRef, useMemo } from 'react';
 import JsBarcode from 'jsbarcode';
 import { useStore } from '@/lib/store';
 
-export default function LabelPreview() {
-  const { width, height, data, config, previewIdx, logo, bannerText, barcodeField, barcodeOrder, topRule } = useStore();
+export default function LabelPreview({ overrideIdx }: { overrideIdx?: number } = {}) {
+  const store = useStore();
+  const { width, height, data, previewIdx, topRule } = store;
+  const idx = overrideIdx ?? previewIdx;
+  const effective = store.getEffectiveConfig(idx);
+  const { config, logo, bannerText, barcodeField, barcodeOrder, barcodeSize } = effective;
   const barcodeRef = useRef<HTMLCanvasElement>(null);
 
-  const row = data[previewIdx] || {};
+  const row = data[idx] || {};
   const activeFields = config.filter(f => f.role !== 'hidden');
 
   // Scale mm → preview pixels
@@ -57,10 +61,11 @@ export default function LabelPreview() {
   useEffect(() => {
     if (barcodeRef.current && hasBarcode) {
       try {
+        const scale = (barcodeSize ?? 100) / 100;
         JsBarcode(barcodeRef.current, String(row[barcodeField]), {
           format: 'CODE128',
-          width: Math.max(1, wPx * 0.004),
-          height: Math.max(16, hPx * 0.09),
+          width: Math.max(1, wPx * 0.004 * scale),
+          height: Math.max(10, hPx * 0.09 * scale),
           displayValue: false,
           margin: 0,
         });
@@ -68,7 +73,7 @@ export default function LabelPreview() {
         console.error('Barcode error:', e);
       }
     }
-  }, [row, barcodeField, hasBarcode, hPx, wPx]);
+  }, [row, barcodeField, hasBarcode, hPx, wPx, barcodeSize]);
 
   if (!data.length) return null;
 
@@ -239,7 +244,7 @@ export default function LabelPreview() {
     >
       <canvas
         ref={barcodeRef}
-        style={{ maxWidth: '85%', height: Math.max(16, hPx * 0.09) }}
+        style={{ maxWidth: `${Math.min(95, 85 * ((barcodeSize ?? 100) / 100))}%`, height: Math.max(10, hPx * 0.09 * ((barcodeSize ?? 100) / 100)) }}
       />
     </div>
   ) : null;

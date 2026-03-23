@@ -19,6 +19,15 @@ export interface FieldConfig {
   border: boolean;
 }
 
+export interface LabelOverride {
+  config?: FieldConfig[];
+  barcodeField?: string;
+  barcodeOrder?: number;
+  barcodeSize?: number;
+  bannerText?: string;
+  logo?: string | null;
+}
+
 export interface SavedVariation {
   id: string;
   name: string;
@@ -27,6 +36,7 @@ export interface SavedVariation {
   height: number;
   barcodeField: string;
   barcodeOrder: number;
+  barcodeSize: number;
   bannerText: string;
   logo: string | null;
   timestamp: number;
@@ -43,9 +53,12 @@ interface LabelState {
   bannerText: string;
   barcodeField: string;
   barcodeOrder: number;
+  barcodeSize: number;
   topRule: boolean;
   activeLayout: string;
   savedVariations: SavedVariation[];
+  labelOverrides: Record<number, LabelOverride>;
+  editingLabelIdx: number | null; // null = global editing
 
   // Actions
   setDimensions: (w: number, h: number) => void;
@@ -57,31 +70,59 @@ interface LabelState {
   setBannerText: (text: string) => void;
   setBarcodeField: (field: string) => void;
   setBarcodeOrder: (order: number) => void;
+  setBarcodeSize: (size: number) => void;
   reorderConfig: (from: number, to: number) => void;
   setTopRule: (v: boolean) => void;
   applyLayout: (presetId: string) => void;
   saveVariation: (name: string) => void;
   loadVariation: (id: string) => void;
   deleteVariation: (id: string) => void;
+  fetchSavedVariations: () => Promise<void>;
+  setEditingLabelIdx: (idx: number | null) => void;
+  setLabelOverride: (idx: number, override: LabelOverride) => void;
+  clearLabelOverride: (idx: number) => void;
+  getEffectiveConfig: (idx: number) => {
+    config: FieldConfig[];
+    barcodeField: string;
+    barcodeOrder: number;
+    barcodeSize: number;
+    bannerText: string;
+    logo: string | null;
+  };
 }
 
-// Load saved variations from localStorage
-const loadSavedVariations = (): SavedVariation[] => {
-  if (typeof window === 'undefined') return [];
+// Fetch saved variations from server
+const fetchVariations = async (): Promise<SavedVariation[]> => {
   try {
-    const stored = localStorage.getItem('label-saved-variations');
-    return stored ? JSON.parse(stored) : [];
+    const res = await fetch('/api/variations');
+    if (!res.ok) return [];
+    return await res.json();
   } catch {
     return [];
   }
 };
 
-const persistVariations = (variations: SavedVariation[]) => {
-  if (typeof window === 'undefined') return;
+const persistVariation = async (variation: SavedVariation) => {
   try {
-    localStorage.setItem('label-saved-variations', JSON.stringify(variations));
+    await fetch('/api/variations', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(variation),
+    });
   } catch {
-    // localStorage full or unavailable
+    // Network error
+  }
+};
+
+const deleteVariationFromServer = async (id: string) => {
+  try {
+    await fetch('/api/variations', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id }),
+    });
+  } catch {
+    // Network error
   }
 };
 
@@ -96,21 +137,75 @@ export const useStore = create<LabelState>((set, get) => ({
   bannerText: '',
   barcodeField: '',
   barcodeOrder: 0,
+  barcodeSize: 100,
   topRule: false,
   activeLayout: 'custom',
-  savedVariations: loadSavedVariations(),
+  savedVariations: [],
+  labelOverrides: {},
+  editingLabelIdx: null,
 
   setDimensions: (width, height) => set({ width, height }),
   setData: (data, columns) => set({ data, columns, previewIdx: 0 }),
-  setConfig: (config) => set({ config }),
-  updateField: (column, updates) => set((state) => ({
-    config: state.config.map(f => f.column === column ? { ...f, ...updates } : f)
-  })),
+  setConfig: (config) => {
+    const s = get();
+    if (s.editingLabelIdx !== null) {
+      const override = s.labelOverrides[s.editingLabelIdx] || {};
+      set({ labelOverrides: { ...s.labelOverrides, [s.editingLabelIdx]: { ...override, config } } });
+    } else {
+      set({ config });
+    }
+  },
+  updateField: (column, updates) => {
+    const s = get();
+    if (s.editingLabelIdx !== null) {
+      const override = s.labelOverrides[s.editingLabelIdx] || {};
+      const baseConfig = override.config ?? s.config;
+      const newConfig = baseConfig.map(f => f.column === column ? { ...f, ...updates } : f);
+      set({ labelOverrides: { ...s.labelOverrides, [s.editingLabelIdx]: { ...override, config: newConfig } } });
+    } else {
+      set((state) => ({
+        config: state.config.map(f => f.column === column ? { ...f, ...updates } : f)
+      }));
+    }
+  },
   setPreviewIdx: (previewIdx) => set({ previewIdx }),
   setLogo: (logo) => set({ logo }),
-  setBannerText: (bannerText) => set({ bannerText }),
-  setBarcodeField: (barcodeField) => set({ barcodeField }),
-  setBarcodeOrder: (barcodeOrder) => set({ barcodeOrder }),
+  setBannerText: (bannerText) => {
+    const s = get();
+    if (s.editingLabelIdx !== null) {
+      const override = s.labelOverrides[s.editingLabelIdx] || {};
+      set({ labelOverrides: { ...s.labelOverrides, [s.editingLabelIdx]: { ...override, bannerText } } });
+    } else {
+      set({ bannerText });
+    }
+  },
+  setBarcodeField: (barcodeField) => {
+    const s = get();
+    if (s.editingLabelIdx !== null) {
+      const override = s.labelOverrides[s.editingLabelIdx] || {};
+      set({ labelOverrides: { ...s.labelOverrides, [s.editingLabelIdx]: { ...override, barcodeField } } });
+    } else {
+      set({ barcodeField });
+    }
+  },
+  setBarcodeOrder: (barcodeOrder) => {
+    const s = get();
+    if (s.editingLabelIdx !== null) {
+      const override = s.labelOverrides[s.editingLabelIdx] || {};
+      set({ labelOverrides: { ...s.labelOverrides, [s.editingLabelIdx]: { ...override, barcodeOrder } } });
+    } else {
+      set({ barcodeOrder });
+    }
+  },
+  setBarcodeSize: (barcodeSize) => {
+    const s = get();
+    if (s.editingLabelIdx !== null) {
+      const override = s.labelOverrides[s.editingLabelIdx] || {};
+      set({ labelOverrides: { ...s.labelOverrides, [s.editingLabelIdx]: { ...override, barcodeSize } } });
+    } else {
+      set({ barcodeSize });
+    }
+  },
   reorderConfig: (from, to) => set((state) => {
     const newConfig = [...state.config];
     const [moved] = newConfig.splice(from, 1);
@@ -143,13 +238,14 @@ export const useStore = create<LabelState>((set, get) => ({
       height: s.height,
       barcodeField: s.barcodeField,
       barcodeOrder: s.barcodeOrder,
+      barcodeSize: s.barcodeSize,
       bannerText: s.bannerText,
       logo: s.logo,
       timestamp: Date.now(),
     };
     const updated = [...s.savedVariations, variation];
-    persistVariations(updated);
     set({ savedVariations: updated });
+    persistVariation(variation);
   },
 
   loadVariation: (id) => {
@@ -161,6 +257,7 @@ export const useStore = create<LabelState>((set, get) => ({
       height: v.height,
       barcodeField: v.barcodeField,
       barcodeOrder: v.barcodeOrder,
+      barcodeSize: v.barcodeSize ?? 100,
       bannerText: v.bannerText,
       logo: v.logo,
     });
@@ -168,7 +265,47 @@ export const useStore = create<LabelState>((set, get) => ({
 
   deleteVariation: (id) => {
     const updated = get().savedVariations.filter(v => v.id !== id);
-    persistVariations(updated);
     set({ savedVariations: updated });
+    deleteVariationFromServer(id);
+  },
+
+  fetchSavedVariations: async () => {
+    const variations = await fetchVariations();
+    set({ savedVariations: variations });
+  },
+
+  setEditingLabelIdx: (idx) => set({ editingLabelIdx: idx }),
+
+  setLabelOverride: (idx, override) => set((state) => ({
+    labelOverrides: { ...state.labelOverrides, [idx]: { ...state.labelOverrides[idx], ...override } },
+  })),
+
+  clearLabelOverride: (idx) => set((state) => {
+    const updated = { ...state.labelOverrides };
+    delete updated[idx];
+    return { labelOverrides: updated };
+  }),
+
+  getEffectiveConfig: (idx) => {
+    const s = get();
+    const override = s.labelOverrides[idx];
+    if (!override) {
+      return {
+        config: s.config,
+        barcodeField: s.barcodeField,
+        barcodeOrder: s.barcodeOrder,
+        barcodeSize: s.barcodeSize,
+        bannerText: s.bannerText,
+        logo: s.logo,
+      };
+    }
+    return {
+      config: override.config ?? s.config,
+      barcodeField: override.barcodeField ?? s.barcodeField,
+      barcodeOrder: override.barcodeOrder ?? s.barcodeOrder,
+      barcodeSize: override.barcodeSize ?? s.barcodeSize,
+      bannerText: override.bannerText ?? s.bannerText,
+      logo: override.logo !== undefined ? override.logo : s.logo,
+    };
   },
 }));

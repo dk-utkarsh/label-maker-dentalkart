@@ -9,7 +9,15 @@ type DisplayItem =
   | { kind: 'barcode' };
 
 export default function ConfigSidebar() {
-  const { config, setConfig, updateField, barcodeField, setBarcodeField, setBarcodeOrder, barcodeOrder, bannerText, setBannerText, columns } = useStore();
+  const store = useStore();
+  const { setConfig, updateField, setBarcodeField, setBarcodeOrder, setBarcodeSize, setBannerText, columns, editingLabelIdx, previewIdx } = store;
+  const idx = editingLabelIdx ?? previewIdx;
+  const effective = store.getEffectiveConfig(idx);
+  const config = editingLabelIdx !== null ? effective.config : store.config;
+  const barcodeField = editingLabelIdx !== null ? effective.barcodeField : store.barcodeField;
+  const barcodeOrder = editingLabelIdx !== null ? effective.barcodeOrder : store.barcodeOrder;
+  const barcodeSize = editingLabelIdx !== null ? effective.barcodeSize : store.barcodeSize;
+  const bannerText = editingLabelIdx !== null ? effective.bannerText : store.bannerText;
   const [expandedField, setExpandedField] = useState<string | null>(null);
 
   const dragIdx = useRef<number | null>(null);
@@ -97,6 +105,28 @@ export default function ConfigSidebar() {
               {columns.map(col => <option key={col} value={col}>{col}</option>)}
             </select>
           </div>
+          {barcodeField && (
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Barcode Size</label>
+                <span className="text-xs font-semibold text-gray-600">{barcodeSize ?? 100}%</span>
+              </div>
+              <input
+                type="range"
+                min={30}
+                max={200}
+                step={5}
+                value={barcodeSize ?? 100}
+                onChange={(e) => setBarcodeSize(Number(e.target.value))}
+                className="w-full accent-violet-500"
+              />
+              <div className="flex justify-between text-[10px] text-gray-400">
+                <span>Small</span>
+                <span>Default</span>
+                <span>Large</span>
+              </div>
+            </div>
+          )}
           <div className="space-y-1.5">
             <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Global Banner Text</label>
             <input
