@@ -165,7 +165,7 @@ const saveLocalVariations = (variations: SavedVariation[]) => {
 // Fetch saved variations — API (Vercel Blob) is primary shared source, localStorage is cache
 const fetchVariations = async (): Promise<SavedVariation[]> => {
   try {
-    const res = await fetch('/api/variations');
+    const res = await fetch(`/api/variations?t=${Date.now()}`, { cache: 'no-store' });
     if (res.ok) {
       const remote: SavedVariation[] = await res.json();
       // Merge any local-only variations into remote (push them to API too)

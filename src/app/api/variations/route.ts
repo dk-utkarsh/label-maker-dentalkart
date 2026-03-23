@@ -10,7 +10,8 @@ async function getVariations() {
     const { blobs } = await list({ prefix: 'variations/' });
     const blob = blobs.find(b => b.pathname === BLOB_PATH);
     if (!blob) return [];
-    const res = await fetch(blob.url);
+    const url = `${blob.url}?t=${Date.now()}`;
+    const res = await fetch(url, { cache: 'no-store' });
     return await res.json();
   } catch {
     return [];
