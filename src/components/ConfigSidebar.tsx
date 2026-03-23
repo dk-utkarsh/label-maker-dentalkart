@@ -1,7 +1,7 @@
 'use client';
 
 import { useStore, type FieldRole, type FontSize, type Alignment } from '@/lib/store';
-import { Settings2, Type, ChevronDown, ChevronUp, AlignLeft, AlignCenter, AlignRight, Bold, CaseSensitive, Square, Columns, GripVertical, Barcode } from 'lucide-react';
+import { Settings2, Type, ChevronDown, ChevronUp, AlignLeft, AlignCenter, AlignRight, Bold, CaseSensitive, Square, Columns, GripVertical, Barcode, SplitSquareVertical } from 'lucide-react';
 import { useState, useRef, useMemo } from 'react';
 
 type DisplayItem =
@@ -334,6 +334,7 @@ export default function ConfigSidebar() {
                       { id: 'showLabel', icon: Type, label: 'Label' },
                       { id: 'sameRow', icon: Columns, label: 'Row \u2194' },
                       { id: 'border', icon: Square, label: 'Box' },
+                      ...(f.border ? [{ id: 'blockStart', icon: SplitSquareVertical, label: 'Split' }] : []),
                     ].map(opt => {
                       const Icon = opt.icon;
                       const isActive = !!(f as any)[opt.id];

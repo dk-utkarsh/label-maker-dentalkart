@@ -20,6 +20,7 @@ export interface FieldConfig {
   suffix: string;
   sameRow: boolean;
   border: boolean;
+  blockStart?: boolean;
 }
 
 export interface LabelOverride {

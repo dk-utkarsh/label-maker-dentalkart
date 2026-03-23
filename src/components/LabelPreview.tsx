@@ -194,7 +194,8 @@ export default function LabelPreview({ overrideIdx }: { overrideIdx?: number } =
       const allBordered = grpRow.every(f => f.border);
       const last = segments[segments.length - 1];
       if (allBordered) {
-        if (last?.type === 'bordered') last.rows.push(grpRow);
+        const shouldBreak = grpRow[0]?.blockStart;
+        if (last?.type === 'bordered' && !shouldBreak) last.rows.push(grpRow);
         else segments.push({ type: 'bordered', rows: [grpRow] });
       } else {
         if (last?.type === 'normal') last.rows.push(grpRow);
