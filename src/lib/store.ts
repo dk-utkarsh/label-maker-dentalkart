@@ -188,13 +188,14 @@ const fetchVariations = async (): Promise<SavedVariation[]> => {
 
 const persistVariation = async (variation: SavedVariation) => {
   try {
-    await fetch('/api/variations', {
+    const res = await fetch('/api/variations', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-cache' },
       body: JSON.stringify(variation),
     });
-  } catch {
-    // Network error — localStorage already has it
+    if (!res.ok) console.error('Save variation API error:', res.status);
+  } catch (e) {
+    console.error('Save variation network error:', e);
   }
 };
 
