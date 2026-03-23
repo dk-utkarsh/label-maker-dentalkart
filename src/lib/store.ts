@@ -28,6 +28,7 @@ export interface LabelOverride {
   bannerText?: string;
   logo?: string | null;
   logoPosition?: LogoPosition;
+  logoSize?: number;
 }
 
 export interface SavedVariation {
@@ -42,6 +43,7 @@ export interface SavedVariation {
   bannerText: string;
   logo: string | null;
   logoPosition: LogoPosition;
+  logoSize: number;
   timestamp: number;
 }
 
@@ -54,6 +56,7 @@ interface LabelState {
   previewIdx: number;
   logo: string | null;
   logoPosition: LogoPosition;
+  logoSize: number;
   bannerText: string;
   barcodeField: string;
   barcodeOrder: number;
@@ -72,6 +75,7 @@ interface LabelState {
   setPreviewIdx: (idx: number) => void;
   setLogo: (logo: string | null) => void;
   setLogoPosition: (pos: LogoPosition) => void;
+  setLogoSize: (size: number) => void;
   setBannerText: (text: string) => void;
   setBarcodeField: (field: string) => void;
   setBarcodeOrder: (order: number) => void;
@@ -94,6 +98,7 @@ interface LabelState {
     bannerText: string;
     logo: string | null;
     logoPosition: LogoPosition;
+    logoSize: number;
   };
 }
 
@@ -141,6 +146,7 @@ export const useStore = create<LabelState>((set, get) => ({
   previewIdx: 0,
   logo: null,
   logoPosition: 'left' as LogoPosition,
+  logoSize: 100,
   bannerText: '',
   barcodeField: '',
   barcodeOrder: 0,
@@ -178,6 +184,7 @@ export const useStore = create<LabelState>((set, get) => ({
   setPreviewIdx: (previewIdx) => set({ previewIdx }),
   setLogo: (logo) => set({ logo }),
   setLogoPosition: (logoPosition) => set({ logoPosition }),
+  setLogoSize: (logoSize) => set({ logoSize }),
   setBannerText: (bannerText) => {
     const s = get();
     if (s.editingLabelIdx !== null) {
@@ -250,6 +257,7 @@ export const useStore = create<LabelState>((set, get) => ({
       bannerText: s.bannerText,
       logo: s.logo,
       logoPosition: s.logoPosition,
+      logoSize: s.logoSize,
       timestamp: Date.now(),
     };
     const updated = [...s.savedVariations, variation];
@@ -321,6 +329,7 @@ export const useStore = create<LabelState>((set, get) => ({
         bannerText: s.bannerText,
         logo: s.logo,
         logoPosition: s.logoPosition,
+        logoSize: s.logoSize,
       };
     }
     return {
@@ -331,6 +340,7 @@ export const useStore = create<LabelState>((set, get) => ({
       bannerText: override.bannerText ?? s.bannerText,
       logo: override.logo !== undefined ? override.logo : s.logo,
       logoPosition: override.logoPosition ?? s.logoPosition,
+      logoSize: override.logoSize ?? s.logoSize,
     };
   },
 }));

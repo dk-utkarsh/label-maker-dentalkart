@@ -9,7 +9,7 @@ export default function LabelPreview({ overrideIdx }: { overrideIdx?: number } =
   const { width, height, data, previewIdx, topRule } = store;
   const idx = overrideIdx ?? previewIdx;
   const effective = store.getEffectiveConfig(idx);
-  const { config, logo, logoPosition, bannerText, barcodeField, barcodeOrder, barcodeSize } = effective;
+  const { config, logo, logoPosition, logoSize, bannerText, barcodeField, barcodeOrder, barcodeSize } = effective;
   const barcodeRef = useRef<HTMLCanvasElement>(null);
 
   const row = data[idx] || {};
@@ -286,7 +286,7 @@ export default function LabelPreview({ overrideIdx }: { overrideIdx?: number } =
           >
             <img
               src={logo}
-              style={{ maxWidth: '30%', maxHeight: hPx * 0.13 }}
+              style={{ maxWidth: `${30 * ((logoSize ?? 100) / 100)}%`, maxHeight: hPx * 0.13 * ((logoSize ?? 100) / 100) }}
               className="object-contain"
               alt="Logo"
             />

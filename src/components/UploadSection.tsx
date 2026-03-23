@@ -14,7 +14,7 @@ const PRESET_SIZES = [
 ];
 
 export default function UploadSection() {
-  const { width, height, setDimensions, setData, setConfig, setLogo, logo, logoPosition, setLogoPosition, data, columns } = useStore();
+  const { width, height, setDimensions, setData, setConfig, setLogo, logo, logoPosition, setLogoPosition, logoSize, setLogoSize, data, columns } = useStore();
   const [isDraggingExcel, setIsDraggingExcel] = useState(false);
   const [isDraggingLogo, setIsDraggingLogo] = useState(false);
   const [excelFileName, setExcelFileName] = useState('');
@@ -172,29 +172,51 @@ export default function UploadSection() {
           )}
         </div>
 
-        {/* Logo Position */}
+        {/* Logo Controls */}
         {logo && (
-          <div className="flex items-center gap-2 px-1">
-            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Logo Position</span>
-            <div className="flex gap-1 ml-auto">
-              {([
-                { pos: 'left' as const, icon: AlignLeft, label: 'Left' },
-                { pos: 'center' as const, icon: AlignCenter, label: 'Center' },
-                { pos: 'right' as const, icon: AlignRight, label: 'Right' },
-              ]).map(({ pos, icon: Icon, label }) => (
-                <button
-                  key={pos}
-                  onClick={() => setLogoPosition(pos)}
-                  title={label}
-                  className={`p-1.5 rounded-lg transition-colors ${
-                    logoPosition === pos
-                      ? 'bg-dk-orange text-white'
-                      : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
-                  }`}
-                >
-                  <Icon size={14} />
-                </button>
-              ))}
+          <div className="space-y-2 px-1">
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Logo Position</span>
+              <div className="flex gap-1 ml-auto">
+                {([
+                  { pos: 'left' as const, icon: AlignLeft, label: 'Left' },
+                  { pos: 'center' as const, icon: AlignCenter, label: 'Center' },
+                  { pos: 'right' as const, icon: AlignRight, label: 'Right' },
+                ]).map(({ pos, icon: Icon, label }) => (
+                  <button
+                    key={pos}
+                    onClick={() => setLogoPosition(pos)}
+                    title={label}
+                    className={`p-1.5 rounded-lg transition-colors ${
+                      logoPosition === pos
+                        ? 'bg-dk-orange text-white'
+                        : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                    }`}
+                  >
+                    <Icon size={14} />
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="space-y-1">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Logo Size</span>
+                <span className="text-[10px] font-semibold text-gray-600">{logoSize}%</span>
+              </div>
+              <input
+                type="range"
+                min={20}
+                max={250}
+                step={5}
+                value={logoSize}
+                onChange={(e) => setLogoSize(Number(e.target.value))}
+                className="w-full accent-dk-orange"
+              />
+              <div className="flex justify-between text-[9px] text-gray-400">
+                <span>Small</span>
+                <span>Default</span>
+                <span>Large</span>
+              </div>
             </div>
           </div>
         )}
