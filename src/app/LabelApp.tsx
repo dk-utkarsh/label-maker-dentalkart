@@ -6,15 +6,17 @@ import UploadSection from '@/components/UploadSection';
 import ConfigSidebar from '@/components/ConfigSidebar';
 import LabelPreview from '@/components/LabelPreview';
 import LayoutSelector from '@/components/LayoutSelector';
-import { Download, ChevronLeft, ChevronRight, Save, Trash2, RotateCcw, Eye, Layers, X, CheckCircle, Loader2, FileSpreadsheet, Palette, Printer, Pencil, Globe, Undo2 } from 'lucide-react';
+import { Download, ChevronLeft, ChevronRight, Save, Trash2, RotateCcw, Eye, Layers, X, CheckCircle, Loader2, FileSpreadsheet, Palette, Printer, Pencil, Globe, Undo2, Copy, Check } from 'lucide-react';
 import { HeroSection } from '@/components/ui/hero-section';
 
 export default function Home() {
-  const { data, previewIdx, setPreviewIdx, width, height, config, savedVariations, saveVariation, loadVariation, deleteVariation, fetchSavedVariations, editingLabelIdx, setEditingLabelIdx, labelOverrides, clearLabelOverride, getEffectiveConfig } = useStore();
+  const { data, previewIdx, setPreviewIdx, width, height, config, savedVariations, saveVariation, loadVariation, deleteVariation, fetchSavedVariations, editingLabelIdx, setEditingLabelIdx, labelOverrides, clearLabelOverride, setLabelOverride, getEffectiveConfig } = useStore();
   const [isGenerating, setIsGenerating] = useState(false);
   const [pdfProgress, setPdfProgress] = useState(0);
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [variationName, setVariationName] = useState('');
+  const [showApplyModal, setShowApplyModal] = useState(false);
+  const [selectedLabels, setSelectedLabels] = useState<Set<number>>(new Set());
   const nameInputRef = useRef<HTMLInputElement>(null);
   const uploadRef = useRef<HTMLDivElement>(null);
 
@@ -290,16 +292,28 @@ export default function Home() {
                               Back to Global
                             </button>
                             {labelOverrides[editingLabelIdx] && (
-                              <button
-                                onClick={() => {
-                                  clearLabelOverride(editingLabelIdx);
-                                  setEditingLabelIdx(null);
-                                }}
-                                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-red-50 text-red-600 text-xs font-bold hover:bg-red-100 transition-all active:scale-95 border border-red-200"
-                              >
-                                <Undo2 size={14} />
-                                Reset to Global
-                              </button>
+                              <>
+                                <button
+                                  onClick={() => {
+                                    setSelectedLabels(new Set());
+                                    setShowApplyModal(true);
+                                  }}
+                                  className="flex items-center gap-2 px-4 py-2 rounded-xl bg-violet-50 text-violet-700 text-xs font-bold hover:bg-violet-100 transition-all active:scale-95 border border-violet-200"
+                                >
+                                  <Copy size={14} />
+                                  Apply to Other Labels
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    clearLabelOverride(editingLabelIdx);
+                                    setEditingLabelIdx(null);
+                                  }}
+                                  className="flex items-center gap-2 px-4 py-2 rounded-xl bg-red-50 text-red-600 text-xs font-bold hover:bg-red-100 transition-all active:scale-95 border border-red-200"
+                                >
+                                  <Undo2 size={14} />
+                                  Reset to Global
+                                </button>
+                              </>
                             )}
                           </>
                         )}
@@ -497,6 +511,157 @@ export default function Home() {
                   }`}
                 >
                   Save Layout
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Apply to Other Labels Modal */}
+      {showApplyModal && editingLabelIdx !== null && labelOverrides[editingLabelIdx] && (
+        <div
+          className="modal-backdrop fixed inset-0 z-[100] bg-black/40 flex items-center justify-center p-4"
+          onClick={(e) => { if (e.target === e.currentTarget) setShowApplyModal(false); }}
+        >
+          <div className="modal-content bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
+            <div className="h-1 bg-gradient-to-r from-violet-500 to-dk-blue" />
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-5">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-violet-100 flex items-center justify-center">
+                    <Copy size={18} className="text-violet-600" />
+                  </div>
+                  <div>
+                    <h2 className="text-base font-bold text-gray-800">Apply to Labels</h2>
+                    <p className="text-xs text-gray-400">Copy Label #{editingLabelIdx + 1} settings to other labels</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowApplyModal(false)}
+                  className="p-2 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              {/* Quick select */}
+              <div className="flex gap-2 mb-3">
+                <button
+                  onClick={() => {
+                    const all = new Set<number>();
+                    for (let i = 0; i < data.length; i++) {
+                      if (i !== editingLabelIdx) all.add(i);
+                    }
+                    setSelectedLabels(all);
+                  }}
+                  className="px-3 py-1.5 rounded-lg bg-violet-50 text-violet-700 text-[10px] font-bold hover:bg-violet-100 transition-colors border border-violet-200"
+                >
+                  Select All
+                </button>
+                <button
+                  onClick={() => setSelectedLabels(new Set())}
+                  className="px-3 py-1.5 rounded-lg bg-gray-50 text-gray-500 text-[10px] font-bold hover:bg-gray-100 transition-colors border border-gray-200"
+                >
+                  Clear
+                </button>
+                {/* Range input */}
+                <div className="flex items-center gap-1 ml-auto">
+                  <input
+                    type="number"
+                    min={1}
+                    max={data.length}
+                    placeholder="From"
+                    className="w-16 px-2 py-1.5 text-[10px] border border-gray-200 rounded-lg text-center"
+                    id="range-from"
+                  />
+                  <span className="text-gray-400 text-[10px]">to</span>
+                  <input
+                    type="number"
+                    min={1}
+                    max={data.length}
+                    placeholder="To"
+                    className="w-16 px-2 py-1.5 text-[10px] border border-gray-200 rounded-lg text-center"
+                    id="range-to"
+                  />
+                  <button
+                    onClick={() => {
+                      const from = parseInt((document.getElementById('range-from') as HTMLInputElement).value) - 1;
+                      const to = parseInt((document.getElementById('range-to') as HTMLInputElement).value) - 1;
+                      if (!isNaN(from) && !isNaN(to) && from >= 0 && to < data.length) {
+                        const updated = new Set(selectedLabels);
+                        for (let i = Math.min(from, to); i <= Math.max(from, to); i++) {
+                          if (i !== editingLabelIdx) updated.add(i);
+                        }
+                        setSelectedLabels(updated);
+                      }
+                    }}
+                    className="px-2 py-1.5 rounded-lg bg-violet-500 text-white text-[10px] font-bold hover:bg-violet-600 transition-colors"
+                  >
+                    Add
+                  </button>
+                </div>
+              </div>
+
+              {/* Label grid */}
+              <div className="max-h-48 overflow-y-auto rounded-xl border border-gray-200 p-2 mb-4">
+                <div className="grid grid-cols-8 gap-1">
+                  {Array.from({ length: data.length }, (_, i) => (
+                    <button
+                      key={i}
+                      disabled={i === editingLabelIdx}
+                      onClick={() => {
+                        const updated = new Set(selectedLabels);
+                        if (updated.has(i)) updated.delete(i);
+                        else updated.add(i);
+                        setSelectedLabels(updated);
+                      }}
+                      className={`px-1 py-1.5 rounded text-[10px] font-bold transition-colors ${
+                        i === editingLabelIdx
+                          ? 'bg-amber-100 text-amber-400 cursor-not-allowed'
+                          : selectedLabels.has(i)
+                          ? 'bg-violet-500 text-white'
+                          : 'bg-gray-50 text-gray-500 hover:bg-gray-100'
+                      }`}
+                    >
+                      {i + 1}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {selectedLabels.size > 0 && (
+                <p className="text-xs text-violet-600 font-semibold mb-4">
+                  {selectedLabels.size} label{selectedLabels.size !== 1 ? 's' : ''} selected
+                </p>
+              )}
+
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowApplyModal(false)}
+                  className="flex-1 py-2.5 rounded-xl border border-gray-200 text-sm font-semibold text-gray-600 hover:bg-gray-50 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => {
+                    const override = labelOverrides[editingLabelIdx];
+                    if (override) {
+                      selectedLabels.forEach(i => {
+                        setLabelOverride(i, structuredClone(override));
+                      });
+                    }
+                    setShowApplyModal(false);
+                  }}
+                  disabled={selectedLabels.size === 0}
+                  className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-2 ${
+                    selectedLabels.size > 0
+                      ? 'bg-violet-600 text-white hover:bg-violet-700 shadow-lg shadow-violet-200 active:scale-95'
+                      : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                  }`}
+                >
+                  <Check size={16} />
+                  Apply to {selectedLabels.size} Label{selectedLabels.size !== 1 ? 's' : ''}
                 </button>
               </div>
             </div>
