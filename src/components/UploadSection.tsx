@@ -2,8 +2,8 @@
 
 import { useState, useRef, useCallback } from 'react';
 import * as XLSX from 'xlsx';
-import { useStore, type FieldConfig } from '@/lib/store';
-import { FileSpreadsheet, Image as ImageIcon, X, Ruler, CheckCircle, AlignLeft, AlignCenter, AlignRight, Layers } from 'lucide-react';
+import { useStore, type FieldConfig, type LayoutSnapshot } from '@/lib/store';
+import { FileSpreadsheet, Image as ImageIcon, X, Ruler, CheckCircle, AlignLeft, AlignCenter, AlignRight, Layers, Copy, Check } from 'lucide-react';
 
 const PRESET_SIZES = [
   { label: '62 x 100', w: 62, h: 100 },
@@ -14,23 +14,19 @@ const PRESET_SIZES = [
 ];
 
 export default function UploadSection() {
-  const { width, height, setDimensions, setData, setConfig, setLogo, logo, logoPosition, setLogoPosition, logoSize, setLogoSize, data, columns } = useStore();
+  const store = useStore();
+  const { width, height, setDimensions, setData, setConfig, setLogo, logo, logoPosition, setLogoPosition, logoSize, setLogoSize, data, columns, getLayoutSnapshot, setLayoutSnapshot } = store;
   const [isDraggingExcel, setIsDraggingExcel] = useState(false);
   const [isDraggingLogo, setIsDraggingLogo] = useState(false);
   const [excelFileName, setExcelFileName] = useState('');
   const [sheetNames, setSheetNames] = useState<string[]>([]);
   const [activeSheet, setActiveSheet] = useState('');
-  const [sheetLogos, setSheetLogos] = useState<Record<string, string | null>>({});
+  const [sheetConfigs, setSheetConfigs] = useState<Record<string, LayoutSnapshot>>({});
+  const [applySheets, setApplySheets] = useState<Set<string>>(new Set());
   const workbookRef = useRef<XLSX.WorkBook | null>(null);
 
-  const loadSheet = useCallback((wb: XLSX.WorkBook, sheetName: string) => {
-    const ws = wb.Sheets[sheetName];
-    if (!ws) return;
-    const sheetData = XLSX.utils.sheet_to_json(ws);
-    if (!sheetData.length) return;
-    const cols = Object.keys(sheetData[0] as any);
-
-    const config: FieldConfig[] = cols.map((col, i) => {
+  const generateConfigForColumns = useCallback((cols: string[]): FieldConfig[] => {
+    return cols.map((col, i) => {
       const lower = col.toLowerCase();
       let role: any = 'body';
       if (i === 0 || lower.includes('name') || lower.includes('product')) role = 'title';
@@ -50,10 +46,17 @@ export default function UploadSection() {
         border: false,
       };
     });
+  }, []);
 
+  const loadSheetData = useCallback((wb: XLSX.WorkBook, sheetName: string): string[] | null => {
+    const ws = wb.Sheets[sheetName];
+    if (!ws) return null;
+    const sheetData = XLSX.utils.sheet_to_json(ws);
+    if (!sheetData.length) return null;
+    const cols = Object.keys(sheetData[0] as any);
     setData(sheetData, cols);
-    setConfig(config);
-  }, [setData, setConfig]);
+    return cols;
+  }, [setData]);
 
   const handleExcel = (file: File) => {
     setExcelFileName(file.name);
@@ -63,33 +66,53 @@ export default function UploadSection() {
       const wb = XLSX.read(bstr, { type: 'binary' });
       workbookRef.current = wb;
       setSheetNames(wb.SheetNames);
+      setSheetConfigs({});
       const firstSheet = wb.SheetNames[0];
       setActiveSheet(firstSheet);
-      loadSheet(wb, firstSheet);
+      const cols = loadSheetData(wb, firstSheet);
+      if (cols) setConfig(generateConfigForColumns(cols));
     };
     reader.readAsBinaryString(file);
   };
 
   const handleSheetChange = (sheetName: string) => {
-    // Save current logo for current sheet before switching
-    setSheetLogos(prev => ({ ...prev, [activeSheet]: logo }));
+    if (!workbookRef.current) return;
+    // Save current layout for current sheet
+    const snapshot = getLayoutSnapshot();
+    setSheetConfigs(prev => ({ ...prev, [activeSheet]: snapshot }));
     setActiveSheet(sheetName);
-    if (workbookRef.current) {
-      loadSheet(workbookRef.current, sheetName);
+
+    // Load data from new sheet
+    const cols = loadSheetData(workbookRef.current, sheetName);
+
+    // Restore saved layout or auto-generate
+    const saved = sheetConfigs[sheetName];
+    if (saved) {
+      setLayoutSnapshot(saved);
+    } else if (cols) {
+      const config = generateConfigForColumns(cols);
+      setConfig(config);
+      // Reset layout settings for fresh sheet
+      setLogo(null);
     }
-    // Restore logo for the new sheet
-    const newLogo = sheetLogos[sheetName] ?? null;
-    setLogo(newLogo);
+  };
+
+  const applyToSelectedSheets = () => {
+    const snapshot = getLayoutSnapshot();
+    setSheetConfigs(prev => {
+      const updated = { ...prev };
+      applySheets.forEach(name => {
+        updated[name] = structuredClone(snapshot);
+      });
+      return updated;
+    });
+    setApplySheets(new Set());
   };
 
   const handleLogo = (file: File) => {
     const reader = new FileReader();
     reader.onload = (e) => {
-      const logoData = e.target?.result as string;
-      setLogo(logoData);
-      if (activeSheet) {
-        setSheetLogos(prev => ({ ...prev, [activeSheet]: logoData }));
-      }
+      setLogo(e.target?.result as string);
     };
     reader.readAsDataURL(file);
   };
@@ -104,7 +127,8 @@ export default function UploadSection() {
     setExcelFileName('');
     setSheetNames([]);
     setActiveSheet('');
-    setSheetLogos({});
+    setSheetConfigs({});
+    setApplySheets(new Set());
     workbookRef.current = null;
   };
 
@@ -180,8 +204,54 @@ export default function UploadSection() {
               ))}
             </select>
             <p className="text-[10px] text-gray-400 mt-2">
-              Each sheet has its own logo. Upload a logo after selecting a sheet.
+              Each sheet has its own layout, logo & settings.
             </p>
+
+            {/* Apply Layout to Other Sheets */}
+            <div className="mt-3 pt-3 border-t border-gray-100">
+              <div className="flex items-center gap-2 mb-2">
+                <Copy size={12} className="text-gray-400" />
+                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Apply Layout To</span>
+                <button
+                  onClick={() => {
+                    const others = sheetNames.filter(n => n !== activeSheet);
+                    setApplySheets(applySheets.size === others.length ? new Set() : new Set(others));
+                  }}
+                  className="text-[10px] text-dk-blue font-bold hover:underline ml-auto"
+                >
+                  {applySheets.size === sheetNames.length - 1 ? 'Clear' : 'All'}
+                </button>
+              </div>
+              <div className="flex flex-wrap gap-1 mb-2">
+                {sheetNames.filter(n => n !== activeSheet).map(name => (
+                  <button
+                    key={name}
+                    onClick={() => {
+                      const updated = new Set(applySheets);
+                      if (updated.has(name)) updated.delete(name);
+                      else updated.add(name);
+                      setApplySheets(updated);
+                    }}
+                    className={`px-2 py-1 rounded-md text-[10px] font-bold transition-all ${
+                      applySheets.has(name)
+                        ? 'bg-dk-blue text-white'
+                        : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                    }`}
+                  >
+                    {name}
+                  </button>
+                ))}
+              </div>
+              {applySheets.size > 0 && (
+                <button
+                  onClick={applyToSelectedSheets}
+                  className="w-full py-1.5 rounded-lg bg-dk-blue text-white text-[10px] font-bold hover:bg-dk-blue-hover transition-colors flex items-center justify-center gap-1.5"
+                >
+                  <Check size={12} />
+                  Apply to {applySheets.size} Sheet{applySheets.size !== 1 ? 's' : ''}
+                </button>
+              )}
+            </div>
           </div>
         )}
 
@@ -200,7 +270,7 @@ export default function UploadSection() {
             <div className="relative h-16 w-full flex items-center justify-center">
               <img src={logo} className="max-h-full max-w-full object-contain" alt="Logo" />
               <button
-                onClick={(e) => { e.stopPropagation(); setLogo(null); if (activeSheet) setSheetLogos(prev => ({ ...prev, [activeSheet]: null })); }}
+                onClick={(e) => { e.stopPropagation(); setLogo(null); }}
                 className="absolute -top-3 -right-3 p-1.5 rounded-full bg-red-100 text-red-500 hover:bg-red-500 hover:text-white transition-colors shadow-sm"
               >
                 <X size={12} />

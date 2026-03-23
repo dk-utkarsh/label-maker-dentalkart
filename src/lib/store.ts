@@ -55,6 +55,23 @@ export interface SavedVariation {
   timestamp: number;
 }
 
+export interface LayoutSnapshot {
+  config: FieldConfig[];
+  barcodeField: string;
+  barcodeOrder: number;
+  barcodeSize: number;
+  qrSize: number;
+  codeType: CodeType;
+  codeAlign: CodeAlign;
+  bannerText: string;
+  logo: string | null;
+  logoPosition: LogoPosition;
+  logoSize: number;
+  topRule: boolean;
+  activeLayout: string;
+  labelOverrides: Record<number, LabelOverride>;
+}
+
 interface LabelState {
   width: number;
   height: number;
@@ -104,6 +121,8 @@ interface LabelState {
   setEditingLabelIdx: (idx: number | null) => void;
   setLabelOverride: (idx: number, override: LabelOverride) => void;
   clearLabelOverride: (idx: number) => void;
+  getLayoutSnapshot: () => LayoutSnapshot;
+  setLayoutSnapshot: (snapshot: LayoutSnapshot) => void;
   getEffectiveConfig: (idx: number) => {
     config: FieldConfig[];
     barcodeField: string;
@@ -375,6 +394,47 @@ export const useStore = create<LabelState>((set, get) => ({
     delete updated[idx];
     return { labelOverrides: updated };
   }),
+
+  getLayoutSnapshot: () => {
+    const s = get();
+    return {
+      config: structuredClone(s.config),
+      barcodeField: s.barcodeField,
+      barcodeOrder: s.barcodeOrder,
+      barcodeSize: s.barcodeSize,
+      qrSize: s.qrSize,
+      codeType: s.codeType,
+      codeAlign: s.codeAlign,
+      bannerText: s.bannerText,
+      logo: s.logo,
+      logoPosition: s.logoPosition,
+      logoSize: s.logoSize,
+      topRule: s.topRule,
+      activeLayout: s.activeLayout,
+      labelOverrides: structuredClone(s.labelOverrides),
+    };
+  },
+
+  setLayoutSnapshot: (snapshot) => {
+    set({
+      config: structuredClone(snapshot.config),
+      barcodeField: snapshot.barcodeField,
+      barcodeOrder: snapshot.barcodeOrder,
+      barcodeSize: snapshot.barcodeSize,
+      qrSize: snapshot.qrSize,
+      codeType: snapshot.codeType,
+      codeAlign: snapshot.codeAlign,
+      bannerText: snapshot.bannerText,
+      logo: snapshot.logo,
+      logoPosition: snapshot.logoPosition,
+      logoSize: snapshot.logoSize,
+      topRule: snapshot.topRule,
+      activeLayout: snapshot.activeLayout,
+      labelOverrides: structuredClone(snapshot.labelOverrides),
+      editingLabelIdx: null,
+      previewIdx: 0,
+    });
+  },
 
   getEffectiveConfig: (idx) => {
     const s = get();
