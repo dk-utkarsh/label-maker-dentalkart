@@ -10,7 +10,7 @@ type DisplayItem =
 
 export default function ConfigSidebar() {
   const store = useStore();
-  const { setConfig, updateField, setBarcodeField, setBarcodeOrder, setBarcodeSize, setCodeType, setBannerText, columns, editingLabelIdx, previewIdx } = store;
+  const { setConfig, updateField, setBarcodeField, setBarcodeOrder, setBarcodeSize, setCodeType, setCodeAlign, setBannerText, columns, editingLabelIdx, previewIdx } = store;
   const idx = editingLabelIdx ?? previewIdx;
   const effective = store.getEffectiveConfig(idx);
   const config = editingLabelIdx !== null ? effective.config : store.config;
@@ -18,6 +18,7 @@ export default function ConfigSidebar() {
   const barcodeOrder = editingLabelIdx !== null ? effective.barcodeOrder : store.barcodeOrder;
   const barcodeSize = editingLabelIdx !== null ? effective.barcodeSize : store.barcodeSize;
   const codeType = editingLabelIdx !== null ? effective.codeType : store.codeType;
+  const codeAlign = editingLabelIdx !== null ? effective.codeAlign : store.codeAlign;
   const bannerText = editingLabelIdx !== null ? effective.bannerText : store.bannerText;
   const [expandedField, setExpandedField] = useState<string | null>(null);
 
@@ -158,6 +159,38 @@ export default function ConfigSidebar() {
               </div>
             </div>
           )}
+
+          {/* Code Position */}
+          {codeType !== 'none' && barcodeField && (
+            <div className="space-y-1.5">
+              <div className="flex items-center gap-2">
+                <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">
+                  {codeType === 'qr' ? 'QR' : 'Barcode'} Position
+                </label>
+                <div className="flex gap-1 ml-auto">
+                  {([
+                    { pos: 'left' as const, icon: AlignLeft, label: 'Left' },
+                    { pos: 'center' as const, icon: AlignCenter, label: 'Center' },
+                    { pos: 'right' as const, icon: AlignRight, label: 'Right' },
+                  ]).map(({ pos, icon: Icon, label }) => (
+                    <button
+                      key={pos}
+                      onClick={() => setCodeAlign(pos)}
+                      title={label}
+                      className={`p-1.5 rounded-lg transition-colors ${
+                        codeAlign === pos
+                          ? 'bg-violet-500 text-white'
+                          : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                      }`}
+                    >
+                      <Icon size={14} />
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
           <div className="space-y-1.5">
             <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Global Banner Text</label>
             <input

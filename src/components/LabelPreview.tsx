@@ -10,7 +10,7 @@ export default function LabelPreview({ overrideIdx }: { overrideIdx?: number } =
   const { width, height, data, previewIdx, topRule } = store;
   const idx = overrideIdx ?? previewIdx;
   const effective = store.getEffectiveConfig(idx);
-  const { config, logo, logoPosition, logoSize, bannerText, barcodeField, barcodeOrder, barcodeSize, codeType } = effective;
+  const { config, logo, logoPosition, logoSize, bannerText, barcodeField, barcodeOrder, barcodeSize, codeType, codeAlign } = effective;
   const barcodeRef = useRef<HTMLCanvasElement>(null);
   const qrRef = useRef<HTMLCanvasElement>(null);
 
@@ -251,12 +251,13 @@ export default function LabelPreview({ overrideIdx }: { overrideIdx?: number } =
     });
   };
 
+  const alignMap = { left: 'flex-start', center: 'center', right: 'flex-end' };
   const codeElement = hasCode ? (
     <div
       style={{
         margin: `${sectionGap * 0.5}px 0`,
         display: 'flex',
-        justifyContent: 'center',
+        justifyContent: alignMap[codeAlign ?? 'center'],
       }}
     >
       {activeCodeType === 'barcode' ? (
