@@ -251,11 +251,24 @@ export const useStore = create<LabelState>((set, get) => ({
   loadVariation: (id) => {
     const v = get().savedVariations.find(v => v.id === id);
     if (!v) return;
+    const s = get();
+
+    // Map saved layout config onto current columns (don't change data)
+    const newConfig = s.config.map(currentField => {
+      // Find matching field from saved variation by column name
+      const savedField = v.config.find(f => f.column === currentField.column);
+      if (savedField) {
+        // Apply saved styling but keep current column reference
+        return { ...structuredClone(savedField) };
+      }
+      // Column doesn't exist in saved variation — keep as-is
+      return currentField;
+    });
+
     set({
-      config: structuredClone(v.config),
-      width: v.width,
-      height: v.height,
-      barcodeField: v.barcodeField,
+      config: newConfig,
+      // Keep current width/height (user's current label size)
+      barcodeField: s.columns.includes(v.barcodeField) ? v.barcodeField : s.barcodeField,
       barcodeOrder: v.barcodeOrder,
       barcodeSize: v.barcodeSize ?? 100,
       bannerText: v.bannerText,
