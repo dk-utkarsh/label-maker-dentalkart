@@ -9,7 +9,7 @@ export default function LabelPreview({ overrideIdx }: { overrideIdx?: number } =
   const { width, height, data, previewIdx, topRule } = store;
   const idx = overrideIdx ?? previewIdx;
   const effective = store.getEffectiveConfig(idx);
-  const { config, logo, bannerText, barcodeField, barcodeOrder, barcodeSize } = effective;
+  const { config, logo, logoPosition, bannerText, barcodeField, barcodeOrder, barcodeSize } = effective;
   const barcodeRef = useRef<HTMLCanvasElement>(null);
 
   const row = data[idx] || {};
@@ -277,7 +277,13 @@ export default function LabelPreview({ overrideIdx }: { overrideIdx?: number } =
 
         {/* Logo */}
         {logo ? (
-          <div style={{ marginBottom: `${sectionGap}px` }} className="flex items-center">
+          <div
+            style={{
+              marginBottom: `${sectionGap}px`,
+              justifyContent: logoPosition === 'center' ? 'center' : logoPosition === 'right' ? 'flex-end' : 'flex-start',
+            }}
+            className="flex items-center"
+          >
             <img
               src={logo}
               style={{ maxWidth: '30%', maxHeight: hPx * 0.13 }}
@@ -288,17 +294,24 @@ export default function LabelPreview({ overrideIdx }: { overrideIdx?: number } =
         ) : !topRule ? (
           <div
             style={{
-              width: Math.max(20, wPx * 0.18),
-              height: Math.max(12, hPx * 0.065),
-              fontSize: `${Math.max(5, unit * 0.017)}px`,
               marginBottom: `${sectionGap}px`,
-              borderColor: '#e2e8f0',
-              backgroundColor: '#f8fafc',
-              color: '#94a3b8',
+              justifyContent: logoPosition === 'center' ? 'center' : logoPosition === 'right' ? 'flex-end' : 'flex-start',
             }}
-            className="rounded border-dashed border flex items-center justify-center font-bold"
+            className="flex items-center"
           >
-            LOGO
+            <div
+              style={{
+                width: Math.max(20, wPx * 0.18),
+                height: Math.max(12, hPx * 0.065),
+                fontSize: `${Math.max(5, unit * 0.017)}px`,
+                borderColor: '#e2e8f0',
+                backgroundColor: '#f8fafc',
+                color: '#94a3b8',
+              }}
+              className="rounded border-dashed border flex items-center justify-center font-bold"
+            >
+              LOGO
+            </div>
           </div>
         ) : null}
 

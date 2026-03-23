@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import * as XLSX from 'xlsx';
 import { useStore, type FieldConfig } from '@/lib/store';
-import { FileSpreadsheet, Image as ImageIcon, X, Ruler, CheckCircle } from 'lucide-react';
+import { FileSpreadsheet, Image as ImageIcon, X, Ruler, CheckCircle, AlignLeft, AlignCenter, AlignRight } from 'lucide-react';
 
 const PRESET_SIZES = [
   { label: '62 x 100', w: 62, h: 100 },
@@ -14,7 +14,7 @@ const PRESET_SIZES = [
 ];
 
 export default function UploadSection() {
-  const { width, height, setDimensions, setData, setConfig, setLogo, logo, data, columns } = useStore();
+  const { width, height, setDimensions, setData, setConfig, setLogo, logo, logoPosition, setLogoPosition, data, columns } = useStore();
   const [isDraggingExcel, setIsDraggingExcel] = useState(false);
   const [isDraggingLogo, setIsDraggingLogo] = useState(false);
   const [excelFileName, setExcelFileName] = useState('');
@@ -171,6 +171,33 @@ export default function UploadSection() {
             </>
           )}
         </div>
+
+        {/* Logo Position */}
+        {logo && (
+          <div className="flex items-center gap-2 px-1">
+            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Logo Position</span>
+            <div className="flex gap-1 ml-auto">
+              {([
+                { pos: 'left' as const, icon: AlignLeft, label: 'Left' },
+                { pos: 'center' as const, icon: AlignCenter, label: 'Center' },
+                { pos: 'right' as const, icon: AlignRight, label: 'Right' },
+              ]).map(({ pos, icon: Icon, label }) => (
+                <button
+                  key={pos}
+                  onClick={() => setLogoPosition(pos)}
+                  title={label}
+                  className={`p-1.5 rounded-lg transition-colors ${
+                    logoPosition === pos
+                      ? 'bg-dk-orange text-white'
+                      : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                  }`}
+                >
+                  <Icon size={14} />
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Dimensions */}
         <div className="p-5 rounded-2xl bg-white border border-gray-200 shadow-sm">

@@ -4,6 +4,7 @@ import { applyLayoutPreset } from './layouts';
 export type FieldRole = 'title' | 'body' | 'footer' | 'hidden';
 export type FontSize = 'xs' | 'sm' | 'md' | 'lg' | 'xl' | 'auto';
 export type Alignment = 'left' | 'center' | 'right';
+export type LogoPosition = 'left' | 'center' | 'right';
 
 export interface FieldConfig {
   column: string;
@@ -26,6 +27,7 @@ export interface LabelOverride {
   barcodeSize?: number;
   bannerText?: string;
   logo?: string | null;
+  logoPosition?: LogoPosition;
 }
 
 export interface SavedVariation {
@@ -39,6 +41,7 @@ export interface SavedVariation {
   barcodeSize: number;
   bannerText: string;
   logo: string | null;
+  logoPosition: LogoPosition;
   timestamp: number;
 }
 
@@ -50,6 +53,7 @@ interface LabelState {
   config: FieldConfig[];
   previewIdx: number;
   logo: string | null;
+  logoPosition: LogoPosition;
   bannerText: string;
   barcodeField: string;
   barcodeOrder: number;
@@ -67,6 +71,7 @@ interface LabelState {
   updateField: (column: string, updates: Partial<FieldConfig>) => void;
   setPreviewIdx: (idx: number) => void;
   setLogo: (logo: string | null) => void;
+  setLogoPosition: (pos: LogoPosition) => void;
   setBannerText: (text: string) => void;
   setBarcodeField: (field: string) => void;
   setBarcodeOrder: (order: number) => void;
@@ -88,6 +93,7 @@ interface LabelState {
     barcodeSize: number;
     bannerText: string;
     logo: string | null;
+    logoPosition: LogoPosition;
   };
 }
 
@@ -134,6 +140,7 @@ export const useStore = create<LabelState>((set, get) => ({
   config: [],
   previewIdx: 0,
   logo: null,
+  logoPosition: 'left' as LogoPosition,
   bannerText: '',
   barcodeField: '',
   barcodeOrder: 0,
@@ -170,6 +177,7 @@ export const useStore = create<LabelState>((set, get) => ({
   },
   setPreviewIdx: (previewIdx) => set({ previewIdx }),
   setLogo: (logo) => set({ logo }),
+  setLogoPosition: (logoPosition) => set({ logoPosition }),
   setBannerText: (bannerText) => {
     const s = get();
     if (s.editingLabelIdx !== null) {
@@ -241,6 +249,7 @@ export const useStore = create<LabelState>((set, get) => ({
       barcodeSize: s.barcodeSize,
       bannerText: s.bannerText,
       logo: s.logo,
+      logoPosition: s.logoPosition,
       timestamp: Date.now(),
     };
     const updated = [...s.savedVariations, variation];
@@ -272,7 +281,8 @@ export const useStore = create<LabelState>((set, get) => ({
       barcodeOrder: v.barcodeOrder,
       barcodeSize: v.barcodeSize ?? 100,
       bannerText: v.bannerText,
-      logo: v.logo,
+      logoPosition: v.logoPosition ?? s.logoPosition,
+      // Keep user's current logo — don't overwrite with saved layout's logo
     });
   },
 
@@ -310,6 +320,7 @@ export const useStore = create<LabelState>((set, get) => ({
         barcodeSize: s.barcodeSize,
         bannerText: s.bannerText,
         logo: s.logo,
+        logoPosition: s.logoPosition,
       };
     }
     return {
@@ -319,6 +330,7 @@ export const useStore = create<LabelState>((set, get) => ({
       barcodeSize: override.barcodeSize ?? s.barcodeSize,
       bannerText: override.bannerText ?? s.bannerText,
       logo: override.logo !== undefined ? override.logo : s.logo,
+      logoPosition: override.logoPosition ?? s.logoPosition,
     };
   },
 }));
