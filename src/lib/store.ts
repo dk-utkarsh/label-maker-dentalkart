@@ -60,6 +60,8 @@ export interface SavedVariation {
 }
 
 export interface LayoutSnapshot {
+  width: number;
+  height: number;
   config: FieldConfig[];
   barcodeField: string;
   barcodeOrder: number;
@@ -394,6 +396,8 @@ export const useStore = create<LabelState>((set, get) => ({
   getLayoutSnapshot: () => {
     const s = get();
     return {
+      width: s.width,
+      height: s.height,
       config: structuredClone(s.config),
       barcodeField: s.barcodeField,
       barcodeOrder: s.barcodeOrder,
@@ -413,6 +417,8 @@ export const useStore = create<LabelState>((set, get) => ({
 
   setLayoutSnapshot: (snapshot) => {
     set({
+      width: snapshot.width,
+      height: snapshot.height,
       config: structuredClone(snapshot.config),
       barcodeField: snapshot.barcodeField,
       barcodeOrder: snapshot.barcodeOrder,
