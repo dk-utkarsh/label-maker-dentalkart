@@ -21,6 +21,7 @@ export interface FieldConfig {
   sameRow: boolean;
   border: boolean;
   blockStart?: boolean;
+  mergeUp?: boolean;
 }
 
 export interface LabelOverride {

@@ -215,12 +215,14 @@ export default function LabelPreview({ overrideIdx }: { overrideIdx?: number } =
               overflow: 'hidden',
             }}
           >
-            {seg.rows.map((grpRow, ri) => (
+            {seg.rows.map((grpRow, ri) => {
+              const nextRowMerges = ri < seg.rows.length - 1 && seg.rows[ri + 1][0]?.mergeUp;
+              return (
               <div
                 key={ri}
                 style={{
                   display: 'flex',
-                  borderBottom: ri < seg.rows.length - 1 ? '1px solid #333' : 'none',
+                  borderBottom: (ri < seg.rows.length - 1 && !nextRowMerges) ? '1px solid #333' : 'none',
                 }}
               >
                 {grpRow.map((f: any, fi: number) => {
@@ -248,7 +250,8 @@ export default function LabelPreview({ overrideIdx }: { overrideIdx?: number } =
                   );
                 })}
               </div>
-            ))}
+            );
+            })}
           </div>
         );
       }
