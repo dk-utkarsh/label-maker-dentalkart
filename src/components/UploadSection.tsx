@@ -1,9 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import * as XLSX from 'xlsx';
 import { useStore, type FieldConfig } from '@/lib/store';
-import { FileSpreadsheet, Image as ImageIcon, X, Ruler, CheckCircle, AlignLeft, AlignCenter, AlignRight } from 'lucide-react';
+import { FileSpreadsheet, Image as ImageIcon, X, Ruler, CheckCircle, AlignLeft, AlignCenter, AlignRight, Layers } from 'lucide-react';
 
 const PRESET_SIZES = [
   { label: '62 x 100', w: 62, h: 100 },
@@ -18,6 +18,42 @@ export default function UploadSection() {
   const [isDraggingExcel, setIsDraggingExcel] = useState(false);
   const [isDraggingLogo, setIsDraggingLogo] = useState(false);
   const [excelFileName, setExcelFileName] = useState('');
+  const [sheetNames, setSheetNames] = useState<string[]>([]);
+  const [activeSheet, setActiveSheet] = useState('');
+  const [sheetLogos, setSheetLogos] = useState<Record<string, string | null>>({});
+  const workbookRef = useRef<XLSX.WorkBook | null>(null);
+
+  const loadSheet = useCallback((wb: XLSX.WorkBook, sheetName: string) => {
+    const ws = wb.Sheets[sheetName];
+    if (!ws) return;
+    const sheetData = XLSX.utils.sheet_to_json(ws);
+    if (!sheetData.length) return;
+    const cols = Object.keys(sheetData[0] as any);
+
+    const config: FieldConfig[] = cols.map((col, i) => {
+      const lower = col.toLowerCase();
+      let role: any = 'body';
+      if (i === 0 || lower.includes('name') || lower.includes('product')) role = 'title';
+      else if (lower.includes('sku') || lower.includes('id') || lower.includes('mfg') || lower.includes('exp')) role = 'footer';
+
+      return {
+        column: col,
+        role,
+        fontSize: 'auto' as const,
+        align: 'left' as const,
+        bold: role === 'title',
+        uppercase: false,
+        showLabel: true,
+        prefix: '',
+        suffix: '',
+        sameRow: false,
+        border: false,
+      };
+    });
+
+    setData(sheetData, cols);
+    setConfig(config);
+  }, [setData, setConfig]);
 
   const handleExcel = (file: File) => {
     setExcelFileName(file.name);
@@ -25,42 +61,35 @@ export default function UploadSection() {
     reader.onload = (e) => {
       const bstr = e.target?.result;
       const wb = XLSX.read(bstr, { type: 'binary' });
-      const wsname = wb.SheetNames[0];
-      const ws = wb.Sheets[wsname];
-      const data = XLSX.utils.sheet_to_json(ws);
-      const columns = Object.keys(data[0] as any);
-
-      const config: FieldConfig[] = columns.map((col, i) => {
-        const lower = col.toLowerCase();
-        let role: any = 'body';
-        if (i === 0 || lower.includes('name') || lower.includes('product')) role = 'title';
-        else if (lower.includes('sku') || lower.includes('id') || lower.includes('mfg') || lower.includes('exp')) role = 'footer';
-
-        return {
-          column: col,
-          role,
-          fontSize: 'auto' as const,
-          align: 'left' as const,
-          bold: role === 'title',
-          uppercase: false,
-          showLabel: true,
-          prefix: '',
-          suffix: '',
-          sameRow: false,
-          border: false,
-        };
-      });
-
-      setData(data, columns);
-      setConfig(config);
+      workbookRef.current = wb;
+      setSheetNames(wb.SheetNames);
+      const firstSheet = wb.SheetNames[0];
+      setActiveSheet(firstSheet);
+      loadSheet(wb, firstSheet);
     };
     reader.readAsBinaryString(file);
+  };
+
+  const handleSheetChange = (sheetName: string) => {
+    // Save current logo for current sheet before switching
+    setSheetLogos(prev => ({ ...prev, [activeSheet]: logo }));
+    setActiveSheet(sheetName);
+    if (workbookRef.current) {
+      loadSheet(workbookRef.current, sheetName);
+    }
+    // Restore logo for the new sheet
+    const newLogo = sheetLogos[sheetName] ?? null;
+    setLogo(newLogo);
   };
 
   const handleLogo = (file: File) => {
     const reader = new FileReader();
     reader.onload = (e) => {
-      setLogo(e.target?.result as string);
+      const logoData = e.target?.result as string;
+      setLogo(logoData);
+      if (activeSheet) {
+        setSheetLogos(prev => ({ ...prev, [activeSheet]: logoData }));
+      }
     };
     reader.readAsDataURL(file);
   };
@@ -73,11 +102,15 @@ export default function UploadSection() {
     setData([], []);
     setConfig([]);
     setExcelFileName('');
+    setSheetNames([]);
+    setActiveSheet('');
+    setSheetLogos({});
+    workbookRef.current = null;
   };
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className={`grid grid-cols-1 gap-4 ${sheetNames.length > 1 ? 'md:grid-cols-4' : 'md:grid-cols-3'}`}>
         {/* Excel Upload */}
         <div
           onDragOver={(e) => { e.preventDefault(); setIsDraggingExcel(true); }}
@@ -113,7 +146,7 @@ export default function UploadSection() {
                 </div>
                 <div>
                   <p className="font-bold text-gray-800 text-sm">{excelFileName || 'Data Loaded'}</p>
-                  <p className="text-[10px] text-gray-400 mt-0.5">{data.length} rows &middot; {columns.length} columns</p>
+                  <p className="text-[10px] text-gray-400 mt-0.5">{data.length} rows &middot; {columns.length} columns{sheetNames.length > 1 ? ` \u00b7 ${sheetNames.length} sheets` : ''}</p>
                 </div>
               </>
             ) : (
@@ -130,6 +163,28 @@ export default function UploadSection() {
           </div>
         </div>
 
+        {/* Sheet Selector */}
+        {sheetNames.length > 1 && (
+          <div className="p-5 rounded-2xl bg-white border border-gray-200 shadow-sm">
+            <div className="flex items-center gap-2 text-gray-600 mb-3 text-xs font-semibold uppercase tracking-wider">
+              <Layers size={14} className="text-dk-blue" />
+              <span>Sheet</span>
+            </div>
+            <select
+              value={activeSheet}
+              onChange={(e) => handleSheetChange(e.target.value)}
+              className="w-full bg-gray-50 border border-gray-200 rounded-lg py-2 px-3 text-gray-800 focus:outline-none focus:ring-2 focus:ring-dk-blue/30 focus:border-dk-blue transition-all text-sm"
+            >
+              {sheetNames.map(name => (
+                <option key={name} value={name}>{name}</option>
+              ))}
+            </select>
+            <p className="text-[10px] text-gray-400 mt-2">
+              Each sheet has its own logo. Upload a logo after selecting a sheet.
+            </p>
+          </div>
+        )}
+
         {/* Logo Upload */}
         <div
           onDragOver={(e) => { e.preventDefault(); setIsDraggingLogo(true); }}
@@ -145,7 +200,7 @@ export default function UploadSection() {
             <div className="relative h-16 w-full flex items-center justify-center">
               <img src={logo} className="max-h-full max-w-full object-contain" alt="Logo" />
               <button
-                onClick={(e) => { e.stopPropagation(); setLogo(null); }}
+                onClick={(e) => { e.stopPropagation(); setLogo(null); if (activeSheet) setSheetLogos(prev => ({ ...prev, [activeSheet]: null })); }}
                 className="absolute -top-3 -right-3 p-1.5 rounded-full bg-red-100 text-red-500 hover:bg-red-500 hover:text-white transition-colors shadow-sm"
               >
                 <X size={12} />
