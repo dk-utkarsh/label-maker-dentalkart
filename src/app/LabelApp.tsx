@@ -6,7 +6,7 @@ import UploadSection from '@/components/UploadSection';
 import ConfigSidebar from '@/components/ConfigSidebar';
 import LabelPreview from '@/components/LabelPreview';
 import LayoutSelector from '@/components/LayoutSelector';
-import { Download, ChevronLeft, ChevronRight, Save, Trash2, RotateCcw, Eye, Layers, X, CheckCircle, Loader2, FileSpreadsheet, Palette, Printer, Pencil, Globe, Undo2, Copy, Check } from 'lucide-react';
+import { Download, ChevronLeft, ChevronRight, Save, Trash2, RotateCcw, Eye, Layers, X, CheckCircle, Loader2, FileSpreadsheet, Palette, Printer, Pencil, Globe, Undo2, Copy, Check, ImageDown } from 'lucide-react';
 import { HeroSection } from '@/components/ui/hero-section';
 
 export default function Home() {
@@ -110,6 +110,75 @@ export default function Home() {
     }
   };
 
+  const generateZIP = async () => {
+    if (!data.length) return;
+    setIsGenerating(true);
+    setPdfProgress(0);
+
+    try {
+      const JSZip = (await import('jszip')).default;
+      const { toCanvas } = await import('html-to-image');
+      const zip = new JSZip();
+
+      const previewEl = document.querySelector('.label-preview-container') as HTMLElement;
+      if (!previewEl) throw new Error('Preview container not found');
+
+      setEditingLabelIdx(null);
+
+      for (let i = 0; i < data.length; i++) {
+        setPreviewIdx(i);
+        setPdfProgress(Math.round(((i + 1) / data.length) * 100));
+        await new Promise(r => setTimeout(r, 150));
+
+        const target = previewEl.querySelector('.label-content') as HTMLElement;
+        if (!target) continue;
+
+        const sanitize = (node: HTMLElement) => {
+          const walker = document.createTreeWalker(node, NodeFilter.SHOW_ELEMENT);
+          let n: Node | null = walker.currentNode;
+          while (n) {
+            const el = n as HTMLElement;
+            const style = window.getComputedStyle(el);
+            if (style.backgroundColor.includes('oklch') || style.backgroundColor.includes('lab')) {
+              el.style.backgroundColor = '#ffffff';
+            }
+            if (style.color.includes('oklch') || style.color.includes('lab')) {
+              el.style.color = '#000000';
+            }
+            if (style.borderColor.includes('oklch') || style.borderColor.includes('lab')) {
+              el.style.borderColor = '#cccccc';
+            }
+            n = walker.nextNode();
+          }
+        };
+        sanitize(target);
+
+        const canvas = await toCanvas(target, {
+          pixelRatio: 3,
+          backgroundColor: '#ffffff',
+        });
+
+        const blob: Blob = await new Promise(resolve => canvas.toBlob(b => resolve(b!), 'image/png'));
+        zip.file(`label-${String(i + 1).padStart(3, '0')}.png`, blob);
+      }
+
+      const zipBlob = await zip.generateAsync({ type: 'blob' });
+      const url = URL.createObjectURL(zipBlob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'labels.zip';
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('ZIP Generation failed:', error);
+      alert('Failed to generate ZIP. Please check the console for details.');
+    } finally {
+      setIsGenerating(false);
+      setPdfProgress(0);
+      setPreviewIdx(0);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-[var(--background)]">
       {/* Header */}
@@ -141,6 +210,22 @@ export default function Home() {
                 </span>
               </div>
             )}
+            <button
+              onClick={generateZIP}
+              disabled={!data.length || isGenerating}
+              className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold shadow-lg transition-all active:scale-95 ${
+                !data.length || isGenerating
+                  ? 'bg-gray-200 text-gray-400 cursor-not-allowed shadow-none'
+                  : 'bg-dk-blue text-white shadow-dk-blue/25 hover:shadow-dk-blue/40'
+              }`}
+            >
+              {isGenerating ? (
+                <Loader2 size={16} className="animate-spin" />
+              ) : (
+                <ImageDown size={16} />
+              )}
+              {isGenerating ? `Generating ${pdfProgress}%` : 'Download ZIP'}
+            </button>
             <button
               onClick={generatePDF}
               disabled={!data.length || isGenerating}
