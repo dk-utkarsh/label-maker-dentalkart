@@ -336,7 +336,8 @@ export default function ConfigSidebar() {
                       { id: 'border', icon: Square, label: 'Box' },
                       ...(f.border ? [
                         { id: 'blockStart', icon: SplitSquareVertical, label: 'Split' },
-                        { id: 'mergeUp', icon: Minus, label: 'Merge' },
+                        { id: 'mergeUp', icon: Minus, label: 'Merge ↑' },
+                        ...(f.sameRow ? [{ id: 'mergeRight', icon: Minus, label: 'Merge ←' }] : []),
                       ] : []),
                     ].map(opt => {
                       const Icon = opt.icon;

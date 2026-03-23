@@ -235,7 +235,7 @@ export default function LabelPreview({ overrideIdx }: { overrideIdx?: number } =
                       style={{
                         flex: 1,
                         padding: `${Math.max(3, borderPad)}px`,
-                        borderRight: fi < grpRow.length - 1 ? '1px solid #333' : 'none',
+                        borderRight: (fi < grpRow.length - 1 && !grpRow[fi + 1]?.mergeRight) ? '1px solid #333' : 'none',
                         fontSize: `${fontSize}px`,
                         fontWeight: f.bold ? '700' : '400',
                         textAlign: f.align,
