@@ -227,7 +227,7 @@ export default function Home() {
 
                   <div className="space-y-6">
                     {/* Preview Card */}
-                    <div className="p-6 rounded-2xl bg-white border border-gray-200 shadow-sm flex flex-col items-center">
+                    <div className="sticky top-20 p-6 rounded-2xl bg-white border border-gray-200 shadow-sm flex flex-col items-center max-h-[calc(100vh-6rem)] overflow-y-auto">
                       <div className="w-full flex items-center justify-between mb-6">
                         <div className="flex items-center gap-2">
                           <div className="flex items-center gap-2 text-dk-blue text-xs font-bold uppercase tracking-widest">
