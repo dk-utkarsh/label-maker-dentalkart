@@ -30,6 +30,7 @@ async function saveVariations(variations: unknown[]) {
   const blob = await put(BLOB_PATH, JSON.stringify(variations), {
     access: 'public',
     addRandomSuffix: false,
+    allowOverwrite: true,
     cacheControlMaxAge: 0,
   });
   return blob;
