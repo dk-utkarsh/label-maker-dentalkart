@@ -279,6 +279,7 @@ export default function LabelPreview({ overrideIdx }: { overrideIdx?: number } =
         gap: `${fieldGap}px`,
       }}
     >
+      {codeRowFields.map(f => renderField(f, f.role, true))}
       {activeCodeType === 'barcode' ? (
         <canvas
           key="barcode-canvas"
@@ -288,7 +289,6 @@ export default function LabelPreview({ overrideIdx }: { overrideIdx?: number } =
       ) : (
         <canvas key="qr-canvas" ref={qrRef} style={{ flexShrink: 0 }} />
       )}
-      {codeRowFields.map(f => renderField(f, f.role, true))}
     </div>
   ) : null;
 
