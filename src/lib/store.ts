@@ -27,6 +27,7 @@ export interface LabelOverride {
   barcodeField?: string;
   barcodeOrder?: number;
   barcodeSize?: number;
+  qrSize?: number;
   codeType?: CodeType;
   codeAlign?: CodeAlign;
   bannerText?: string;
@@ -44,6 +45,7 @@ export interface SavedVariation {
   barcodeField: string;
   barcodeOrder: number;
   barcodeSize: number;
+  qrSize: number;
   codeType: CodeType;
   codeAlign: CodeAlign;
   bannerText: string;
@@ -67,6 +69,7 @@ interface LabelState {
   barcodeField: string;
   barcodeOrder: number;
   barcodeSize: number;
+  qrSize: number;
   codeType: CodeType;
   codeAlign: CodeAlign;
   topRule: boolean;
@@ -88,6 +91,7 @@ interface LabelState {
   setBarcodeField: (field: string) => void;
   setBarcodeOrder: (order: number) => void;
   setBarcodeSize: (size: number) => void;
+  setQrSize: (size: number) => void;
   setCodeType: (type: CodeType) => void;
   setCodeAlign: (align: CodeAlign) => void;
   reorderConfig: (from: number, to: number) => void;
@@ -105,6 +109,7 @@ interface LabelState {
     barcodeField: string;
     barcodeOrder: number;
     barcodeSize: number;
+    qrSize: number;
     codeType: CodeType;
     codeAlign: CodeAlign;
     bannerText: string;
@@ -163,6 +168,7 @@ export const useStore = create<LabelState>((set, get) => ({
   barcodeField: '',
   barcodeOrder: 0,
   barcodeSize: 100,
+  qrSize: 100,
   codeType: 'barcode' as CodeType,
   codeAlign: 'center' as CodeAlign,
   topRule: false,
@@ -235,13 +241,30 @@ export const useStore = create<LabelState>((set, get) => ({
       set({ barcodeSize });
     }
   },
+  setQrSize: (qrSize) => {
+    const s = get();
+    if (s.editingLabelIdx !== null) {
+      const override = s.labelOverrides[s.editingLabelIdx] || {};
+      set({ labelOverrides: { ...s.labelOverrides, [s.editingLabelIdx]: { ...override, qrSize } } });
+    } else {
+      set({ qrSize });
+    }
+  },
   setCodeType: (codeType) => {
     const s = get();
     if (s.editingLabelIdx !== null) {
       const override = s.labelOverrides[s.editingLabelIdx] || {};
-      set({ labelOverrides: { ...s.labelOverrides, [s.editingLabelIdx]: { ...override, codeType } } });
+      if (codeType === 'none') {
+        set({ labelOverrides: { ...s.labelOverrides, [s.editingLabelIdx]: { ...override, codeType, barcodeSize: 100, qrSize: 100 } } });
+      } else {
+        set({ labelOverrides: { ...s.labelOverrides, [s.editingLabelIdx]: { ...override, codeType } } });
+      }
     } else {
-      set({ codeType });
+      if (codeType === 'none') {
+        set({ codeType, barcodeSize: 100, qrSize: 100 });
+      } else {
+        set({ codeType });
+      }
     }
   },
   setCodeAlign: (codeAlign) => {
@@ -286,6 +309,7 @@ export const useStore = create<LabelState>((set, get) => ({
       barcodeField: s.barcodeField,
       barcodeOrder: s.barcodeOrder,
       barcodeSize: s.barcodeSize,
+      qrSize: s.qrSize,
       codeType: s.codeType,
       codeAlign: s.codeAlign,
       bannerText: s.bannerText,
@@ -322,6 +346,7 @@ export const useStore = create<LabelState>((set, get) => ({
       barcodeField: s.columns.includes(v.barcodeField) ? v.barcodeField : s.barcodeField,
       barcodeOrder: v.barcodeOrder,
       barcodeSize: v.barcodeSize ?? 100,
+      qrSize: v.qrSize ?? 100,
       bannerText: v.bannerText,
       logoPosition: v.logoPosition ?? s.logoPosition,
       // Keep user's current logo — don't overwrite with saved layout's logo
@@ -360,6 +385,7 @@ export const useStore = create<LabelState>((set, get) => ({
         barcodeField: s.barcodeField,
         barcodeOrder: s.barcodeOrder,
         barcodeSize: s.barcodeSize,
+        qrSize: s.qrSize,
         codeType: s.codeType,
         codeAlign: s.codeAlign,
         bannerText: s.bannerText,
@@ -373,6 +399,7 @@ export const useStore = create<LabelState>((set, get) => ({
       barcodeField: override.barcodeField ?? s.barcodeField,
       barcodeOrder: override.barcodeOrder ?? s.barcodeOrder,
       barcodeSize: override.barcodeSize ?? s.barcodeSize,
+      qrSize: override.qrSize ?? s.qrSize,
       codeType: override.codeType ?? s.codeType,
       codeAlign: override.codeAlign ?? s.codeAlign,
       bannerText: override.bannerText ?? s.bannerText,

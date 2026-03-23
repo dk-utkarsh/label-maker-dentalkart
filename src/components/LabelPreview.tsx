@@ -10,7 +10,7 @@ export default function LabelPreview({ overrideIdx }: { overrideIdx?: number } =
   const { width, height, data, previewIdx, topRule } = store;
   const idx = overrideIdx ?? previewIdx;
   const effective = store.getEffectiveConfig(idx);
-  const { config, logo, logoPosition, logoSize, bannerText, barcodeField, barcodeOrder, barcodeSize, codeType, codeAlign } = effective;
+  const { config, logo, logoPosition, logoSize, bannerText, barcodeField, barcodeOrder, barcodeSize, qrSize, codeType, codeAlign } = effective;
   const barcodeRef = useRef<HTMLCanvasElement>(null);
   const qrRef = useRef<HTMLCanvasElement>(null);
 
@@ -47,6 +47,7 @@ export default function LabelPreview({ overrideIdx }: { overrideIdx?: number } =
 
   const activeCodeType = codeType ?? 'barcode';
   const hasCode = !!(barcodeField && row[barcodeField] && activeCodeType !== 'none');
+  const currentCodeSize = activeCodeType === 'qr' ? (qrSize ?? 100) : (barcodeSize ?? 100);
 
   // Barcode section position
   const barcodeSection = useMemo(() => {
@@ -82,21 +83,37 @@ export default function LabelPreview({ overrideIdx }: { overrideIdx?: number } =
   // Render QR code
   useEffect(() => {
     if (qrRef.current && hasCode && activeCodeType === 'qr') {
-      const scale = (barcodeSize ?? 100) / 100;
-      const qrSize = Math.max(30, Math.min(wPx, hPx) * 0.25 * scale);
+      const scale = (qrSize ?? 100) / 100;
+      const qrCanvasSize = Math.max(30, Math.min(wPx, hPx) * 0.25 * scale);
       QRCode.toCanvas(qrRef.current, String(row[barcodeField]), {
-        width: qrSize,
+        width: qrCanvasSize,
         margin: 0,
         color: { dark: '#000000', light: '#ffffff' },
       }).catch(e => console.error('QR error:', e));
     }
-  }, [row, barcodeField, hasCode, hPx, wPx, barcodeSize, activeCodeType]);
+  }, [row, barcodeField, hasCode, hPx, wPx, qrSize, activeCodeType]);
 
   if (!data.length) return null;
 
-  const titles = activeFields.filter(f => f.role === 'title');
-  const bodies = activeFields.filter(f => f.role === 'body');
-  const footers = activeFields.filter(f => f.role === 'footer');
+  // Collect fields that should render inline with the barcode/QR (sameRow right after barcode)
+  const codeRowFields = useMemo(() => {
+    if (!hasCode) return [];
+    const fields: typeof activeFields = [];
+    for (let i = barcodeOrder; i < config.length; i++) {
+      if (config[i].sameRow && config[i].role !== 'hidden') {
+        fields.push(config[i]);
+      } else {
+        break;
+      }
+    }
+    return fields;
+  }, [hasCode, barcodeOrder, config, activeFields]);
+
+  const codeRowColumns = useMemo(() => new Set(codeRowFields.map(f => f.column)), [codeRowFields]);
+
+  const titles = activeFields.filter(f => f.role === 'title' && !codeRowColumns.has(f.column));
+  const bodies = activeFields.filter(f => f.role === 'body' && !codeRowColumns.has(f.column));
+  const footers = activeFields.filter(f => f.role === 'footer' && !codeRowColumns.has(f.column));
 
   const groupRows = (fields: any[]) => {
     const rows: any[][] = [];
@@ -257,17 +274,20 @@ export default function LabelPreview({ overrideIdx }: { overrideIdx?: number } =
       style={{
         margin: `${sectionGap * 0.5}px 0`,
         display: 'flex',
-        justifyContent: alignMap[codeAlign ?? 'center'],
+        justifyContent: codeRowFields.length > 0 ? 'flex-start' : alignMap[codeAlign ?? 'center'],
+        alignItems: 'center',
+        gap: `${fieldGap}px`,
       }}
     >
       {activeCodeType === 'barcode' ? (
         <canvas
           ref={barcodeRef}
-          style={{ maxWidth: `${Math.min(95, 85 * ((barcodeSize ?? 100) / 100))}%`, height: Math.max(10, hPx * 0.09 * ((barcodeSize ?? 100) / 100)) }}
+          style={{ maxWidth: `${Math.min(95, 85 * (currentCodeSize / 100))}%`, height: Math.max(10, hPx * 0.09 * (currentCodeSize / 100)), flexShrink: 0 }}
         />
       ) : (
-        <canvas ref={qrRef} />
+        <canvas ref={qrRef} style={{ flexShrink: 0 }} />
       )}
+      {codeRowFields.map(f => renderField(f, f.role, true))}
     </div>
   ) : null;
 

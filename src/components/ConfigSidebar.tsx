@@ -10,16 +10,19 @@ type DisplayItem =
 
 export default function ConfigSidebar() {
   const store = useStore();
-  const { setConfig, updateField, setBarcodeField, setBarcodeOrder, setBarcodeSize, setCodeType, setCodeAlign, setBannerText, columns, editingLabelIdx, previewIdx } = store;
+  const { setConfig, updateField, setBarcodeField, setBarcodeOrder, setBarcodeSize, setQrSize, setCodeType, setCodeAlign, setBannerText, columns, editingLabelIdx, previewIdx } = store;
   const idx = editingLabelIdx ?? previewIdx;
   const effective = store.getEffectiveConfig(idx);
   const config = editingLabelIdx !== null ? effective.config : store.config;
   const barcodeField = editingLabelIdx !== null ? effective.barcodeField : store.barcodeField;
   const barcodeOrder = editingLabelIdx !== null ? effective.barcodeOrder : store.barcodeOrder;
   const barcodeSize = editingLabelIdx !== null ? effective.barcodeSize : store.barcodeSize;
+  const qrSize = editingLabelIdx !== null ? effective.qrSize : store.qrSize;
   const codeType = editingLabelIdx !== null ? effective.codeType : store.codeType;
   const codeAlign = editingLabelIdx !== null ? effective.codeAlign : store.codeAlign;
   const bannerText = editingLabelIdx !== null ? effective.bannerText : store.bannerText;
+  const currentCodeSize = codeType === 'qr' ? (qrSize ?? 100) : (barcodeSize ?? 100);
+  const setCurrentCodeSize = codeType === 'qr' ? setQrSize : setBarcodeSize;
   const [expandedField, setExpandedField] = useState<string | null>(null);
 
   const dragIdx = useRef<number | null>(null);
@@ -141,15 +144,15 @@ export default function ConfigSidebar() {
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
                 <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">{codeType === 'qr' ? 'QR' : 'Barcode'} Size</label>
-                <span className="text-xs font-semibold text-gray-600">{barcodeSize ?? 100}%</span>
+                <span className="text-xs font-semibold text-gray-600">{currentCodeSize}%</span>
               </div>
               <input
                 type="range"
                 min={30}
                 max={200}
                 step={5}
-                value={barcodeSize ?? 100}
-                onChange={(e) => setBarcodeSize(Number(e.target.value))}
+                value={currentCodeSize}
+                onChange={(e) => setCurrentCodeSize(Number(e.target.value))}
                 className="w-full accent-violet-500"
               />
               <div className="flex justify-between text-[10px] text-gray-400">
