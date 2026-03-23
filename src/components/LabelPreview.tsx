@@ -205,12 +205,17 @@ export default function LabelPreview({ overrideIdx }: { overrideIdx?: number } =
 
     return segments.map((seg, si) => {
       if (seg.type === 'bordered') {
+        // Check if any field in the segment has openBorder
+        const isOpen = seg.rows.some(r => r.some((f: any) => f.openBorder));
         // Render as table-like bordered grid
         return (
           <div
             key={si}
             style={{
-              border: '1.5px solid #222',
+              borderTop: '1.5px solid #222',
+              borderBottom: '1.5px solid #222',
+              borderLeft: isOpen ? 'none' : '1.5px solid #222',
+              borderRight: isOpen ? 'none' : '1.5px solid #222',
               marginBottom: `${sectionGap}px`,
               overflow: 'hidden',
             }}

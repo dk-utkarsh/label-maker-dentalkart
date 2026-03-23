@@ -338,6 +338,7 @@ export default function ConfigSidebar() {
                         { id: 'blockStart', icon: SplitSquareVertical, label: 'Split' },
                         { id: 'mergeUp', icon: Minus, label: 'Merge ↑' },
                         ...(f.sameRow ? [{ id: 'mergeRight', icon: Minus, label: 'Merge ←' }] : []),
+                        { id: 'openBorder', icon: Columns, label: 'Open' },
                       ] : []),
                     ].map(opt => {
                       const Icon = opt.icon;

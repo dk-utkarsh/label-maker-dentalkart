@@ -23,6 +23,7 @@ export interface FieldConfig {
   blockStart?: boolean;
   mergeUp?: boolean;
   mergeRight?: boolean;
+  openBorder?: boolean;
 }
 
 export interface LabelOverride {
