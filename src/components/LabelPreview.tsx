@@ -281,11 +281,12 @@ export default function LabelPreview({ overrideIdx }: { overrideIdx?: number } =
     >
       {activeCodeType === 'barcode' ? (
         <canvas
+          key="barcode-canvas"
           ref={barcodeRef}
-          style={{ maxWidth: `${Math.min(95, 85 * (currentCodeSize / 100))}%`, height: Math.max(10, hPx * 0.09 * (currentCodeSize / 100)), flexShrink: 0 }}
+          style={{ maxWidth: `${Math.min(95, 85 * (currentCodeSize / 100))}%`, flexShrink: 0 }}
         />
       ) : (
-        <canvas ref={qrRef} style={{ flexShrink: 0 }} />
+        <canvas key="qr-canvas" ref={qrRef} style={{ flexShrink: 0 }} />
       )}
       {codeRowFields.map(f => renderField(f, f.role, true))}
     </div>
