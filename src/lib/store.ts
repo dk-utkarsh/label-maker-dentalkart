@@ -142,49 +142,17 @@ interface LabelState {
   };
 }
 
-// localStorage helpers for variation persistence
-const LS_KEY = 'label-maker-variations';
-
-const getLocalVariations = (): SavedVariation[] => {
-  try {
-    const raw = localStorage.getItem(LS_KEY);
-    return raw ? JSON.parse(raw) : [];
-  } catch {
-    return [];
-  }
-};
-
-const saveLocalVariations = (variations: SavedVariation[]) => {
-  try {
-    localStorage.setItem(LS_KEY, JSON.stringify(variations));
-  } catch {
-    // Storage full or unavailable
-  }
-};
-
-// Fetch saved variations — API (Vercel Blob) is the shared global source
+// Fetch saved variations from Vercel Blob via API
 const fetchVariations = async (): Promise<SavedVariation[]> => {
   try {
     const res = await fetch(`/api/variations?t=${Date.now()}`, { cache: 'no-store' });
     if (res.ok) {
-      const remote: SavedVariation[] = await res.json();
-      // Merge local-only variations and sync them up
-      const local = getLocalVariations();
-      const remoteIds = new Set(remote.map(v => v.id));
-      const localOnly = local.filter(v => !remoteIds.has(v.id));
-      if (localOnly.length > 0) {
-        const all = [...remote, ...localOnly].sort((a, b) => a.timestamp - b.timestamp);
-        saveLocalVariations(all);
-        syncVariationsToAPI(all);
-        return all;
-      }
-      saveLocalVariations(remote);
-      return remote;
+      return await res.json();
     }
   } catch {
     // API unavailable
   }
-  return getLocalVariations();
+  return [];
 };
 
 // Send the full list to the API — avoids read-modify-write race conditions
@@ -367,7 +335,6 @@ export const useStore = create<LabelState>((set, get) => ({
     };
     const updated = [...s.savedVariations, variation];
     set({ savedVariations: updated });
-    saveLocalVariations(updated);
     syncVariationsToAPI(updated);
   },
 
@@ -404,7 +371,6 @@ export const useStore = create<LabelState>((set, get) => ({
   deleteVariation: (id) => {
     const updated = get().savedVariations.filter(v => v.id !== id);
     set({ savedVariations: updated });
-    saveLocalVariations(updated);
     syncVariationsToAPI(updated);
   },
 
