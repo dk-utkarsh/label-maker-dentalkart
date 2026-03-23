@@ -162,52 +162,42 @@ const saveLocalVariations = (variations: SavedVariation[]) => {
   }
 };
 
-// Fetch saved variations — API (Vercel Blob) is primary shared source, localStorage is cache
+// Fetch saved variations — API (Vercel Blob) is the shared global source
 const fetchVariations = async (): Promise<SavedVariation[]> => {
   try {
     const res = await fetch(`/api/variations?t=${Date.now()}`, { cache: 'no-store' });
     if (res.ok) {
       const remote: SavedVariation[] = await res.json();
-      // Merge any local-only variations into remote (push them to API too)
+      // Merge local-only variations and sync them up
       const local = getLocalVariations();
       const remoteIds = new Set(remote.map(v => v.id));
       const localOnly = local.filter(v => !remoteIds.has(v.id));
-      const all = [...remote, ...localOnly].sort((a, b) => a.timestamp - b.timestamp);
-      saveLocalVariations(all);
-      // Sync local-only items to API
-      for (const v of localOnly) {
-        persistVariation(v);
+      if (localOnly.length > 0) {
+        const all = [...remote, ...localOnly].sort((a, b) => a.timestamp - b.timestamp);
+        saveLocalVariations(all);
+        syncVariationsToAPI(all);
+        return all;
       }
-      return all;
+      saveLocalVariations(remote);
+      return remote;
     }
   } catch {
-    // API unavailable — fall back to localStorage
+    // API unavailable
   }
   return getLocalVariations();
 };
 
-const persistVariation = async (variation: SavedVariation) => {
+// Send the full list to the API — avoids read-modify-write race conditions
+const syncVariationsToAPI = async (variations: SavedVariation[]) => {
   try {
     const res = await fetch('/api/variations', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-cache' },
-      body: JSON.stringify(variation),
+      body: JSON.stringify(variations),
     });
-    if (!res.ok) console.error('Save variation API error:', res.status);
+    if (!res.ok) console.error('Sync variations API error:', res.status);
   } catch (e) {
-    console.error('Save variation network error:', e);
-  }
-};
-
-const deleteVariationFromServer = async (id: string) => {
-  try {
-    await fetch('/api/variations', {
-      method: 'DELETE',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id }),
-    });
-  } catch {
-    // Network error — localStorage already updated
+    console.error('Sync variations network error:', e);
   }
 };
 
@@ -378,7 +368,7 @@ export const useStore = create<LabelState>((set, get) => ({
     const updated = [...s.savedVariations, variation];
     set({ savedVariations: updated });
     saveLocalVariations(updated);
-    persistVariation(variation);
+    syncVariationsToAPI(updated);
   },
 
   loadVariation: (id) => {
@@ -415,7 +405,7 @@ export const useStore = create<LabelState>((set, get) => ({
     const updated = get().savedVariations.filter(v => v.id !== id);
     set({ savedVariations: updated });
     saveLocalVariations(updated);
-    deleteVariationFromServer(id);
+    syncVariationsToAPI(updated);
   },
 
   fetchSavedVariations: async () => {
