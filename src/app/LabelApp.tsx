@@ -37,6 +37,57 @@ export default function Home() {
     setShowSaveModal(false);
   };
 
+  /** Inject pHYs chunk into PNG to set DPI metadata */
+  const setPngDpi = (pngBuffer: ArrayBuffer, dpi: number): Blob => {
+    const ppm = Math.round(dpi / 0.0254); // pixels per meter
+    // pHYs chunk: 4-byte x-ppm, 4-byte y-ppm, 1-byte unit (1 = meter)
+    const phys = new Uint8Array(9);
+    const view = new DataView(phys.buffer);
+    view.setUint32(0, ppm);
+    view.setUint32(4, ppm);
+    phys[8] = 1; // unit = meter
+
+    // Build chunk: length(4) + type(4) + data(9) + crc(4)
+    const chunkType = new Uint8Array([0x70, 0x48, 0x59, 0x73]); // "pHYs"
+    const chunkLen = new Uint8Array(4);
+    new DataView(chunkLen.buffer).setUint32(0, 9);
+
+    // CRC32 over type + data
+    const crcData = new Uint8Array(4 + 9);
+    crcData.set(chunkType, 0);
+    crcData.set(phys, 4);
+    const crc = crc32(crcData);
+    const crcBytes = new Uint8Array(4);
+    new DataView(crcBytes.buffer).setUint32(0, crc);
+
+    const src = new Uint8Array(pngBuffer);
+    // Insert after IHDR chunk (PNG signature=8 bytes, IHDR chunk=25 bytes → offset 33)
+    const insertAt = 33;
+    const chunk = new Uint8Array(4 + 4 + 9 + 4);
+    chunk.set(chunkLen, 0);
+    chunk.set(chunkType, 4);
+    chunk.set(phys, 8);
+    chunk.set(crcBytes, 17);
+
+    const result = new Uint8Array(src.length + chunk.length);
+    result.set(src.subarray(0, insertAt), 0);
+    result.set(chunk, insertAt);
+    result.set(src.subarray(insertAt), insertAt + chunk.length);
+    return new Blob([result], { type: 'image/png' });
+  };
+
+  /** CRC32 for PNG chunks */
+  const crc32 = (buf: Uint8Array): number => {
+    let c = 0xffffffff;
+    for (let i = 0; i < buf.length; i++) {
+      c ^= buf[i];
+      for (let j = 0; j < 8; j++) {
+        c = (c >>> 1) ^ (c & 1 ? 0xedb88320 : 0);
+      }
+    }
+    return (c ^ 0xffffffff) >>> 0;
+  };
+
   /** Build inlined @font-face CSS so html-to-image embeds Google Fonts in canvas */
   const buildFontEmbedCSS = async (): Promise<string | undefined> => {
     try {
@@ -207,14 +258,22 @@ export default function Home() {
         };
         sanitize(target);
 
+        // Calculate pixelRatio for 300 DPI output
+        const scale = Math.min(550 / width, 750 / height);
+        const dpiRatio = Math.max(3, Math.ceil(300 / (25.4 * scale)));
+
         const canvas = await toCanvas(target, {
-          pixelRatio: 3,
+          pixelRatio: dpiRatio,
           backgroundColor: '#ffffff',
           fontEmbedCSS,
         });
 
-        const blob: Blob = await new Promise(resolve => canvas.toBlob(b => resolve(b!), 'image/png'));
-        zip.file(`label-${String(i + 1).padStart(3, '0')}.png`, blob);
+        // Inject 300 DPI (pHYs chunk) into PNG
+        const pngBuf = await new Promise<ArrayBuffer>(resolve => {
+          canvas.toBlob(b => b!.arrayBuffer().then(resolve), 'image/png');
+        });
+        const dpiBlob = setPngDpi(pngBuf, 300);
+        zip.file(`label-${String(i + 1).padStart(3, '0')}.png`, dpiBlob);
       }
 
       const zipBlob = await zip.generateAsync({ type: 'blob' });
