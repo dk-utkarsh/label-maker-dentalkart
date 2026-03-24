@@ -37,6 +37,51 @@ export default function Home() {
     setShowSaveModal(false);
   };
 
+  /** Build inlined @font-face CSS so html-to-image embeds Google Fonts in canvas */
+  const buildFontEmbedCSS = async (): Promise<string | undefined> => {
+    try {
+      // Collect unique font families actually used in the current config
+      const usedFonts = new Set<string>();
+      config.forEach(f => { if (f.fontFamily) usedFonts.add(f.fontFamily); });
+      if (usedFonts.size === 0) return undefined;
+
+      // Find all @font-face rules from loaded stylesheets
+      const fontFaces: string[] = [];
+      for (const sheet of Array.from(document.styleSheets)) {
+        try {
+          for (const rule of Array.from(sheet.cssRules)) {
+            if (rule instanceof CSSFontFaceRule) {
+              const family = rule.style.getPropertyValue('font-family').replace(/['"]/g, '');
+              if (usedFonts.has(family)) {
+                // Fetch the font file and convert to base64 data URI
+                const srcMatch = rule.cssText.match(/url\(["']?(https?:\/\/[^"')]+)["']?\)/);
+                if (srcMatch) {
+                  try {
+                    const resp = await fetch(srcMatch[1]);
+                    const buf = await resp.arrayBuffer();
+                    const b64 = btoa(String.fromCharCode(...new Uint8Array(buf)));
+                    const mime = srcMatch[1].includes('.woff2') ? 'font/woff2' : 'font/woff';
+                    const inlined = rule.cssText.replace(srcMatch[0], `url(data:${mime};base64,${b64})`);
+                    fontFaces.push(inlined);
+                  } catch {
+                    fontFaces.push(rule.cssText);
+                  }
+                } else {
+                  fontFaces.push(rule.cssText);
+                }
+              }
+            }
+          }
+        } catch {
+          // Cross-origin stylesheet — skip
+        }
+      }
+      return fontFaces.length > 0 ? fontFaces.join('\n') : undefined;
+    } catch {
+      return undefined;
+    }
+  };
+
   const generatePDF = async () => {
     if (!data.length) return;
     setIsGenerating(true);
@@ -57,6 +102,10 @@ export default function Home() {
 
       // Exit per-label edit mode before generating
       setEditingLabelIdx(null);
+
+      // Pre-build font embed CSS and wait for fonts to load
+      await document.fonts.ready;
+      const fontEmbedCSS = await buildFontEmbedCSS();
 
       for (let i = 0; i < data.length; i++) {
         setPreviewIdx(i);
@@ -89,6 +138,7 @@ export default function Home() {
         const canvas = await toCanvas(target, {
           pixelRatio: 3,
           backgroundColor: '#ffffff',
+          fontEmbedCSS,
         });
 
         const imgData = canvas.toDataURL('image/png');
@@ -125,6 +175,10 @@ export default function Home() {
 
       setEditingLabelIdx(null);
 
+      // Pre-build font embed CSS and wait for fonts to load
+      await document.fonts.ready;
+      const fontEmbedCSS = await buildFontEmbedCSS();
+
       for (let i = 0; i < data.length; i++) {
         setPreviewIdx(i);
         setPdfProgress(Math.round(((i + 1) / data.length) * 100));
@@ -156,6 +210,7 @@ export default function Home() {
         const canvas = await toCanvas(target, {
           pixelRatio: 3,
           backgroundColor: '#ffffff',
+          fontEmbedCSS,
         });
 
         const blob: Blob = await new Promise(resolve => canvas.toBlob(b => resolve(b!), 'image/png'));
