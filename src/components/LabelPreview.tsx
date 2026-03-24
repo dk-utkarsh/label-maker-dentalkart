@@ -7,7 +7,7 @@ import { useStore } from '@/lib/store';
 
 export default function LabelPreview({ overrideIdx }: { overrideIdx?: number } = {}) {
   const store = useStore();
-  const { width, height, data, previewIdx, topRule } = store;
+  const { width, height, data, previewIdx, topRule, outerBorder } = store;
   const idx = overrideIdx ?? previewIdx;
   const effective = store.getEffectiveConfig(idx);
   const { config, logo, logoPosition, logoSize, bannerText, barcodeField, barcodeOrder, barcodeSize, qrSize, codeType, codeAlign } = effective;
@@ -313,7 +313,7 @@ export default function LabelPreview({ overrideIdx }: { overrideIdx?: number } =
           padding: `${pad}px`,
           backgroundColor: '#ffffff',
         }}
-        className="label-content shadow-2xl rounded-sm flex flex-col overflow-hidden border-2"
+        className={`label-content shadow-2xl rounded-sm flex flex-col overflow-hidden ${outerBorder ? 'border-2' : ''}`}
       >
         {/* Top Rule — thick black line */}
         {topRule && (

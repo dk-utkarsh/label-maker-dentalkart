@@ -74,6 +74,7 @@ export interface LayoutSnapshot {
   logoPosition: LogoPosition;
   logoSize: number;
   topRule: boolean;
+  outerBorder: boolean;
   activeLayout: string;
   labelOverrides: Record<number, LabelOverride>;
 }
@@ -96,6 +97,7 @@ interface LabelState {
   codeType: CodeType;
   codeAlign: CodeAlign;
   topRule: boolean;
+  outerBorder: boolean;
   activeLayout: string;
   savedVariations: SavedVariation[];
   labelOverrides: Record<number, LabelOverride>;
@@ -119,6 +121,7 @@ interface LabelState {
   setCodeAlign: (align: CodeAlign) => void;
   reorderConfig: (from: number, to: number) => void;
   setTopRule: (v: boolean) => void;
+  setOuterBorder: (v: boolean) => void;
   applyLayout: (presetId: string) => void;
   saveVariation: (name: string) => void;
   loadVariation: (id: string) => void;
@@ -189,6 +192,7 @@ export const useStore = create<LabelState>((set, get) => ({
   codeType: 'barcode' as CodeType,
   codeAlign: 'center' as CodeAlign,
   topRule: false,
+  outerBorder: true,
   activeLayout: 'custom',
   savedVariations: [],
   labelOverrides: {},
@@ -300,6 +304,7 @@ export const useStore = create<LabelState>((set, get) => ({
     return { config: newConfig };
   }),
   setTopRule: (topRule) => set({ topRule }),
+  setOuterBorder: (outerBorder) => set({ outerBorder }),
   applyLayout: (presetId) => {
     const s = get();
     if (!s.columns.length) return;
@@ -410,6 +415,7 @@ export const useStore = create<LabelState>((set, get) => ({
       logoPosition: s.logoPosition,
       logoSize: s.logoSize,
       topRule: s.topRule,
+      outerBorder: s.outerBorder,
       activeLayout: s.activeLayout,
       labelOverrides: structuredClone(s.labelOverrides),
     };
@@ -431,6 +437,7 @@ export const useStore = create<LabelState>((set, get) => ({
       logoPosition: snapshot.logoPosition,
       logoSize: snapshot.logoSize,
       topRule: snapshot.topRule,
+      outerBorder: snapshot.outerBorder ?? true,
       activeLayout: snapshot.activeLayout,
       labelOverrides: structuredClone(snapshot.labelOverrides),
       editingLabelIdx: null,

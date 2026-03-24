@@ -10,7 +10,7 @@ type DisplayItem =
 
 export default function ConfigSidebar() {
   const store = useStore();
-  const { setConfig, updateField, setBarcodeField, setBarcodeOrder, setBarcodeSize, setQrSize, setCodeType, setCodeAlign, setBannerText, columns, editingLabelIdx, previewIdx } = store;
+  const { setConfig, updateField, setBarcodeField, setBarcodeOrder, setBarcodeSize, setQrSize, setCodeType, setCodeAlign, setBannerText, setOuterBorder, columns, editingLabelIdx, previewIdx } = store;
   const idx = editingLabelIdx ?? previewIdx;
   const effective = store.getEffectiveConfig(idx);
   const config = editingLabelIdx !== null ? effective.config : store.config;
@@ -99,6 +99,17 @@ export default function ConfigSidebar() {
           <span>Extra Settings</span>
         </div>
         <div className="space-y-4">
+          {/* Outer Border Toggle */}
+          <div className="flex items-center justify-between">
+            <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Label Border</label>
+            <button
+              onClick={() => setOuterBorder(!store.outerBorder)}
+              className={`relative w-10 h-5 rounded-full transition-colors ${store.outerBorder ? 'bg-dk-blue' : 'bg-gray-300'}`}
+            >
+              <span className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${store.outerBorder ? 'translate-x-5' : ''}`} />
+            </button>
+          </div>
+
           {/* Code Type Toggle */}
           <div className="space-y-1.5">
             <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Code Type</label>
