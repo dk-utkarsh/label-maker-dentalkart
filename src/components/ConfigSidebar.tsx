@@ -364,6 +364,7 @@ export default function ConfigSidebar() {
                         <option value="100">Thin</option>
                         <option value="400">Regular</option>
                         <option value="600">Semi-Bold</option>
+                        <option value="700">Bold</option>
                       </select>
                     </div>
                   </div>
