@@ -7,13 +7,33 @@ export type Alignment = 'left' | 'center' | 'right';
 export type LogoPosition = 'left' | 'center' | 'right';
 export type CodeType = 'none' | 'barcode' | 'qr';
 export type CodeAlign = 'left' | 'center' | 'right';
+export type FontWeight = '100' | '200' | '300' | '400' | '500' | '600' | '700' | '800' | '900';
+
+export const FONT_FAMILIES = [
+  { value: '', label: 'Default' },
+  { value: 'Inter', label: 'Inter' },
+  { value: 'Roboto', label: 'Roboto' },
+  { value: 'Open Sans', label: 'Open Sans' },
+  { value: 'Montserrat', label: 'Montserrat' },
+  { value: 'Poppins', label: 'Poppins' },
+  { value: 'Lato', label: 'Lato' },
+  { value: 'Oswald', label: 'Oswald' },
+  { value: 'Raleway', label: 'Raleway' },
+  { value: 'Playfair Display', label: 'Playfair Display' },
+  { value: 'Merriweather', label: 'Merriweather' },
+  { value: 'Lora', label: 'Lora' },
+  { value: 'Nunito', label: 'Nunito' },
+  { value: 'Roboto Mono', label: 'Roboto Mono' },
+  { value: 'Bebas Neue', label: 'Bebas Neue' },
+] as const;
 
 export interface FieldConfig {
   column: string;
   role: FieldRole;
   fontSize: FontSize;
   align: Alignment;
-  bold: boolean;
+  fontWeight: FontWeight;
+  fontFamily: string;
   uppercase: boolean;
   showLabel: boolean;
   prefix: string;
@@ -24,6 +44,20 @@ export interface FieldConfig {
   mergeUp?: boolean;
   mergeRight?: boolean;
   openBorder?: boolean;
+}
+
+/** Migrate legacy saved configs that have `bold` instead of `fontWeight` */
+function migrateFieldConfig(f: any): FieldConfig {
+  const migrated = { ...f };
+  if (!migrated.fontWeight) {
+    const bold = migrated.bold;
+    delete migrated.bold;
+    migrated.fontWeight = bold ? '700' : '400';
+  }
+  if (migrated.fontFamily === undefined) {
+    migrated.fontFamily = '';
+  }
+  return migrated;
 }
 
 export interface LabelOverride {
@@ -56,6 +90,8 @@ export interface SavedVariation {
   logo: string | null;
   logoPosition: LogoPosition;
   logoSize: number;
+  topRule?: boolean;
+  outerBorder?: boolean;
   timestamp: number;
 }
 
@@ -152,7 +188,12 @@ const fetchVariations = async (): Promise<SavedVariation[]> => {
   try {
     const res = await fetch(`/api/variations?t=${Date.now()}`, { cache: 'no-store' });
     if (res.ok) {
-      return await res.json();
+      const raw: any[] = await res.json();
+      // Migrate legacy bold → fontWeight in saved configs
+      return raw.map(v => ({
+        ...v,
+        config: (v.config || []).map(migrateFieldConfig),
+      }));
     }
   } catch {
     // API unavailable
@@ -338,6 +379,8 @@ export const useStore = create<LabelState>((set, get) => ({
       logo: s.logo,
       logoPosition: s.logoPosition,
       logoSize: s.logoSize,
+      topRule: s.topRule,
+      outerBorder: s.outerBorder,
       timestamp: Date.now(),
     };
     const updated = [...s.savedVariations, variation];
@@ -350,27 +393,36 @@ export const useStore = create<LabelState>((set, get) => ({
     if (!v) return;
     const s = get();
 
-    // Map saved layout config onto current columns (don't change data)
-    const newConfig = s.config.map(currentField => {
-      // Find matching field from saved variation by column name
-      const savedField = v.config.find(f => f.column === currentField.column);
-      if (savedField) {
-        // Apply saved styling but keep current column reference
-        return { ...structuredClone(savedField) };
+    // Rebuild config in saved order, then append any new columns not in saved layout
+    const savedColumns = new Set(v.config.map(f => f.column));
+    const currentColumns = new Set(s.columns);
+
+    // Start with saved config in saved order (only columns that still exist)
+    const newConfig: FieldConfig[] = v.config
+      .filter(f => currentColumns.has(f.column))
+      .map(f => structuredClone(f));
+
+    // Append any current columns not in saved variation (keep their current config)
+    s.config.forEach(currentField => {
+      if (!savedColumns.has(currentField.column)) {
+        newConfig.push(currentField);
       }
-      // Column doesn't exist in saved variation — keep as-is
-      return currentField;
     });
 
     set({
       config: newConfig,
-      // Keep current width/height (user's current label size)
+      width: v.width,
+      height: v.height,
       barcodeField: s.columns.includes(v.barcodeField) ? v.barcodeField : s.barcodeField,
       barcodeOrder: v.barcodeOrder,
       barcodeSize: v.barcodeSize ?? 100,
       qrSize: v.qrSize ?? 100,
+      codeType: v.codeType ?? s.codeType,
+      codeAlign: v.codeAlign ?? s.codeAlign,
       bannerText: v.bannerText,
       logoPosition: v.logoPosition ?? s.logoPosition,
+      topRule: v.topRule ?? s.topRule,
+      outerBorder: v.outerBorder ?? s.outerBorder,
       // Keep user's current logo — don't overwrite with saved layout's logo
     });
   },

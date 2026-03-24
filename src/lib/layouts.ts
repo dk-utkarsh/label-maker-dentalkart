@@ -105,18 +105,18 @@ function applyDentalkart(columns: string[]) {
   const config: FieldConfig[] = [];
 
   titles.forEach(col => {
-    config.push(makeField(col, 'title', { fontSize: 'xl', align: 'center', bold: true, uppercase: true }));
+    config.push(makeField(col, 'title', { fontSize: 'xl', align: 'center', fontWeight: '700', uppercase: true }));
   });
 
   skus.forEach(col => {
-    config.push(makeField(col, 'body', { fontSize: 'md', align: 'center', bold: true, showLabel: true }));
+    config.push(makeField(col, 'body', { fontSize: 'md', align: 'center', fontWeight: '700', showLabel: true }));
   });
 
   grid.forEach((col, i) => {
     config.push(makeField(col, 'body', {
       fontSize: 'sm',
       align: 'left',
-      bold: false,
+      fontWeight: '400',
       uppercase: true,
       showLabel: true,
       sameRow: i % 2 === 1,
@@ -152,7 +152,7 @@ function applyDentalkartPositional(columns: string[]) {
 
   const config: FieldConfig[] = columns.map((col, i) => {
     if (i < titleCount) {
-      return makeField(col, 'title', { fontSize: 'xl', align: 'center', bold: true, uppercase: true });
+      return makeField(col, 'title', { fontSize: 'xl', align: 'center', fontWeight: '700', uppercase: true });
     }
     if (i >= bodyEnd) {
       return makeField(col, 'footer', { fontSize: 'xs', showLabel: true });
@@ -181,7 +181,7 @@ function applyDentalkartPositional(columns: string[]) {
 function applySimple(columns: string[]) {
   const n = columns.length;
   const config: FieldConfig[] = columns.map((col, i) => {
-    if (i === 0) return makeField(col, 'title', { fontSize: 'lg', align: 'center', bold: true, uppercase: true });
+    if (i === 0) return makeField(col, 'title', { fontSize: 'lg', align: 'center', fontWeight: '700', uppercase: true });
     if (i >= n - 2 && n > 3) return makeField(col, 'footer', { fontSize: 'xs', showLabel: true });
     return makeField(col, 'body', { fontSize: 'md', showLabel: true });
   });
@@ -193,7 +193,7 @@ function applySimple(columns: string[]) {
 
 function applyCompact(columns: string[]) {
   const config: FieldConfig[] = columns.map((col, i) => {
-    if (i === 0) return makeField(col, 'title', { fontSize: 'md', bold: true, uppercase: true });
+    if (i === 0) return makeField(col, 'title', { fontSize: 'md', fontWeight: '700', uppercase: true });
     return makeField(col, 'body', {
       fontSize: 'xs',
       showLabel: true,
@@ -241,12 +241,12 @@ function applyPharmacy(columns: string[]) {
   const config: FieldConfig[] = [];
 
   titles.forEach(col => {
-    config.push(makeField(col, 'title', { fontSize: 'lg', align: 'center', bold: true, uppercase: true }));
+    config.push(makeField(col, 'title', { fontSize: 'lg', align: 'center', fontWeight: '700', uppercase: true }));
   });
 
   // Composition in bordered section
   compositions.forEach(col => {
-    config.push(makeField(col, 'body', { fontSize: 'sm', showLabel: true, bold: true, border: true }));
+    config.push(makeField(col, 'body', { fontSize: 'sm', showLabel: true, fontWeight: '700', border: true }));
   });
 
   // Dosage/directions
@@ -264,7 +264,7 @@ function applyPharmacy(columns: string[]) {
 
   // Warnings
   warnings.forEach(col => {
-    config.push(makeField(col, 'body', { fontSize: 'xs', showLabel: true, bold: true }));
+    config.push(makeField(col, 'body', { fontSize: 'xs', showLabel: true, fontWeight: '700' }));
   });
 
   // Storage
@@ -327,17 +327,17 @@ function applyShipping(columns: string[]) {
 
   // Product name — large
   titles.forEach(col => {
-    config.push(makeField(col, 'title', { fontSize: 'xl', align: 'center', bold: true, uppercase: true }));
+    config.push(makeField(col, 'title', { fontSize: 'xl', align: 'center', fontWeight: '700', uppercase: true }));
   });
 
   // SKU/Order reference
   skus.forEach(col => {
-    config.push(makeField(col, 'body', { fontSize: 'md', align: 'center', bold: true, showLabel: true }));
+    config.push(makeField(col, 'body', { fontSize: 'md', align: 'center', fontWeight: '700', showLabel: true }));
   });
 
   // Quantity
   qtys.forEach(col => {
-    config.push(makeField(col, 'body', { fontSize: 'lg', bold: true, showLabel: true, border: true }));
+    config.push(makeField(col, 'body', { fontSize: 'lg', fontWeight: '700', showLabel: true, border: true }));
   });
 
   // Address block
@@ -360,7 +360,7 @@ function applyShipping(columns: string[]) {
 
   // Handling instructions as footer
   handlings.forEach(col => {
-    config.push(makeField(col, 'footer', { fontSize: 'xs', showLabel: true, bold: true, uppercase: true }));
+    config.push(makeField(col, 'footer', { fontSize: 'xs', showLabel: true, fontWeight: '700', uppercase: true }));
   });
 
   const barcodeField = columns.find(c => nameHint(c, barcodeKeys)) || skus[0] || '';
@@ -403,13 +403,13 @@ function applyShelfTag(columns: string[]) {
 
   // Product name
   titles.forEach(col => {
-    config.push(makeField(col, 'title', { fontSize: 'lg', align: 'center', bold: true }));
+    config.push(makeField(col, 'title', { fontSize: 'lg', align: 'center', fontWeight: '700' }));
   });
 
   // PRICE — huge, centered, bold
   prices.forEach(col => {
     config.push(makeField(col, 'body', {
-      fontSize: 'xl', align: 'center', bold: true, showLabel: true,
+      fontSize: 'xl', align: 'center', fontWeight: '700', showLabel: true,
       prefix: '\u20B9 ',
     }));
   });
@@ -474,13 +474,13 @@ function applyCompliance(columns: string[]) {
   const config: FieldConfig[] = [];
 
   titles.forEach(col => {
-    config.push(makeField(col, 'title', { fontSize: 'lg', align: 'center', bold: true, uppercase: true }));
+    config.push(makeField(col, 'title', { fontSize: 'lg', align: 'center', fontWeight: '700', uppercase: true }));
   });
 
   // License/certification fields — bordered grid
   licenses.forEach((col, i) => {
     config.push(makeField(col, 'body', {
-      fontSize: 'sm', showLabel: true, bold: true, uppercase: true,
+      fontSize: 'sm', showLabel: true, fontWeight: '700', uppercase: true,
       sameRow: i % 2 === 1, border: true,
     }));
   });
@@ -495,7 +495,7 @@ function applyCompliance(columns: string[]) {
 
   // Manufacturer info
   mfgs.forEach(col => {
-    config.push(makeField(col, 'body', { fontSize: 'sm', showLabel: true, bold: true }));
+    config.push(makeField(col, 'body', { fontSize: 'sm', showLabel: true, fontWeight: '700' }));
   });
 
   // Importer/marketer info
@@ -557,22 +557,22 @@ function applyWarehouse(columns: string[]) {
 
   // SKU as primary title — largest text
   skus.forEach(col => {
-    config.push(makeField(col, 'title', { fontSize: 'xl', align: 'center', bold: true, uppercase: true, showLabel: true }));
+    config.push(makeField(col, 'title', { fontSize: 'xl', align: 'center', fontWeight: '700', uppercase: true, showLabel: true }));
   });
 
   // Product name — secondary title
   titles.forEach(col => {
-    config.push(makeField(col, 'body', { fontSize: 'lg', align: 'center', bold: true }));
+    config.push(makeField(col, 'body', { fontSize: 'lg', align: 'center', fontWeight: '700' }));
   });
 
   // Location — prominent, bordered
   locations.forEach(col => {
-    config.push(makeField(col, 'body', { fontSize: 'lg', bold: true, showLabel: true, border: true, uppercase: true }));
+    config.push(makeField(col, 'body', { fontSize: 'lg', fontWeight: '700', showLabel: true, border: true, uppercase: true }));
   });
 
   // Quantity — prominent, bordered
   qtys.forEach(col => {
-    config.push(makeField(col, 'body', { fontSize: 'lg', bold: true, showLabel: true, border: true }));
+    config.push(makeField(col, 'body', { fontSize: 'lg', fontWeight: '700', showLabel: true, border: true }));
   });
 
   // Batch/Lot — bordered grid
@@ -619,7 +619,8 @@ function makeField(
     role,
     fontSize: 'md',
     align: 'left',
-    bold: false,
+    fontWeight: '400',
+    fontFamily: '',
     uppercase: false,
     showLabel: false,
     prefix: '',
@@ -627,5 +628,5 @@ function makeField(
     sameRow: false,
     border: false,
     ...overrides,
-  };
+  } as FieldConfig;
 }

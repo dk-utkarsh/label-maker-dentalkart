@@ -1,7 +1,7 @@
 'use client';
 
-import { useStore, type FieldRole, type FontSize, type Alignment } from '@/lib/store';
-import { Settings2, Type, ChevronDown, ChevronUp, AlignLeft, AlignCenter, AlignRight, Bold, CaseSensitive, Square, Columns, GripVertical, Barcode, SplitSquareVertical, Minus } from 'lucide-react';
+import { useStore, type FieldRole, type FontSize, type FontWeight, type Alignment, FONT_FAMILIES } from '@/lib/store';
+import { Settings2, Type, ChevronDown, ChevronUp, AlignLeft, AlignCenter, AlignRight, CaseSensitive, Square, Columns, GripVertical, Barcode, SplitSquareVertical, Minus } from 'lucide-react';
 import { useState, useRef, useMemo } from 'react';
 
 type DisplayItem =
@@ -337,10 +337,40 @@ export default function ConfigSidebar() {
                     </div>
                   </div>
 
+                  {/* Font Style & Weight */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Font Style</label>
+                      <select
+                        value={f.fontFamily || ''}
+                        onChange={(e) => updateField(f.column, { fontFamily: e.target.value })}
+                        className="w-full bg-gray-50 border border-gray-200 rounded-lg py-1.5 px-2 text-xs text-gray-800"
+                        style={{ fontFamily: f.fontFamily || 'inherit' }}
+                      >
+                        {FONT_FAMILIES.map(ff => (
+                          <option key={ff.value} value={ff.value} style={{ fontFamily: ff.value || 'inherit' }}>
+                            {ff.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Font Weight</label>
+                      <select
+                        value={f.fontWeight || '400'}
+                        onChange={(e) => updateField(f.column, { fontWeight: e.target.value as FontWeight })}
+                        className="w-full bg-gray-50 border border-gray-200 rounded-lg py-1.5 px-2 text-xs text-gray-800"
+                      >
+                        <option value="100">Thin</option>
+                        <option value="400">Regular</option>
+                        <option value="600">Semi-Bold</option>
+                      </select>
+                    </div>
+                  </div>
+
                   {/* Toggles */}
                   <div className="flex flex-wrap gap-2 pt-2">
                     {[
-                      { id: 'bold', icon: Bold, label: 'Bold' },
                       { id: 'uppercase', icon: CaseSensitive, label: 'Upper' },
                       { id: 'showLabel', icon: Type, label: 'Label' },
                       { id: 'sameRow', icon: Columns, label: 'Row \u2194' },

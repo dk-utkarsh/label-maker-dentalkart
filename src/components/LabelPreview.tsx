@@ -149,7 +149,8 @@ export default function LabelPreview({ overrideIdx }: { overrideIdx?: number } =
         key={f.column}
         style={{
           fontSize: `${fontSize}px`,
-          fontWeight: f.bold ? '700' : (role === 'title' ? '600' : '400'),
+          fontWeight: f.fontWeight || (role === 'title' ? '600' : '400'),
+          fontFamily: f.fontFamily ? `'${f.fontFamily}', sans-serif` : undefined,
           textAlign: f.align,
           lineHeight: 1.3,
           wordBreak: 'break-word',
@@ -242,7 +243,8 @@ export default function LabelPreview({ overrideIdx }: { overrideIdx?: number } =
                         padding: `${Math.max(3, borderPad)}px`,
                         borderRight: (fi < grpRow.length - 1 && !grpRow[fi + 1]?.mergeRight) ? '1px solid #333' : 'none',
                         fontSize: `${fontSize}px`,
-                        fontWeight: f.bold ? '700' : '400',
+                        fontWeight: f.fontWeight || '400',
+                        fontFamily: f.fontFamily ? `'${f.fontFamily}', sans-serif` : undefined,
                         textAlign: f.align,
                         lineHeight: 1.35,
                         wordBreak: 'break-word',
