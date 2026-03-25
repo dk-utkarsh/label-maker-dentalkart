@@ -258,9 +258,9 @@ export default function Home() {
         };
         sanitize(target);
 
-        // Calculate pixelRatio for 300 DPI output
+        // Calculate pixelRatio for 500 DPI output
         const scale = Math.min(550 / width, 750 / height);
-        const dpiRatio = Math.max(3, Math.ceil(300 / (25.4 * scale)));
+        const dpiRatio = Math.max(3, Math.ceil(500 / (25.4 * scale)));
 
         const canvas = await toCanvas(target, {
           pixelRatio: dpiRatio,
@@ -268,11 +268,11 @@ export default function Home() {
           fontEmbedCSS,
         });
 
-        // Inject 300 DPI (pHYs chunk) into PNG
+        // Inject 500 DPI (pHYs chunk) into PNG
         const pngBuf = await new Promise<ArrayBuffer>(resolve => {
           canvas.toBlob(b => b!.arrayBuffer().then(resolve), 'image/png');
         });
-        const dpiBlob = setPngDpi(pngBuf, 300);
+        const dpiBlob = setPngDpi(pngBuf, 500);
         zip.file(`label-${String(i + 1).padStart(3, '0')}.png`, dpiBlob);
       }
 
