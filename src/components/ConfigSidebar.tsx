@@ -1,7 +1,7 @@
 'use client';
 
 import { useStore, type FieldRole, type FontSize, type FontWeight, type Alignment, FONT_FAMILIES } from '@/lib/store';
-import { Settings2, Type, ChevronDown, ChevronUp, AlignLeft, AlignCenter, AlignRight, CaseSensitive, Square, Columns, GripVertical, Barcode, SplitSquareVertical, Minus, CornerDownLeft, Undo2 } from 'lucide-react';
+import { Settings2, Type, ChevronDown, ChevronUp, AlignLeft, AlignCenter, AlignRight, CaseSensitive, Square, Columns, GripVertical, Barcode, SplitSquareVertical, Minus, CornerDownLeft, Undo2, Layers, Check } from 'lucide-react';
 import { useState, useRef, useMemo } from 'react';
 
 type DisplayItem =
@@ -10,7 +10,8 @@ type DisplayItem =
 
 export default function ConfigSidebar() {
   const store = useStore();
-  const { setConfig, updateField, setBarcodeField, setBarcodeOrder, setBarcodeSize, setQrSize, setCodeType, setCodeAlign, setBannerText, setOuterBorder, setPinFooter, columns, editingLabelIdx, previewIdx, dataOverrides, setDataOverride, clearDataOverride, data } = store;
+  const { setConfig, updateField, setBarcodeField, setBarcodeOrder, setBarcodeSize, setQrSize, setCodeType, setCodeAlign, setBannerText, setOuterBorder, setPinFooter, columns, editingLabelIdx, previewIdx, dataOverrides, setDataOverride, clearDataOverride, applyDataOverrideToAll, clearDataOverrideForColumn, data } = store;
+  const [appliedFlash, setAppliedFlash] = useState<{ column: string; count: number } | null>(null);
   const idx = editingLabelIdx ?? previewIdx;
   const rawValue = (col: string) => String(data[idx]?.[col] ?? '');
   const displayValue = (col: string) => dataOverrides[idx]?.[col] ?? rawValue(col);
@@ -34,6 +35,17 @@ export default function ConfigSidebar() {
       ta.setSelectionRange(inner, inner + replacement.length);
     });
   };
+
+  const handleApplyToAll = (col: string) => {
+    const value = displayValue(col);
+    const count = applyDataOverrideToAll(col, value);
+    setAppliedFlash({ column: col, count });
+    setTimeout(() => setAppliedFlash(s => (s?.column === col ? null : s)), 2500);
+  };
+
+  // How many labels currently have an override for this column
+  const overrideCountFor = (col: string) =>
+    Object.values(dataOverrides).reduce((acc, row) => acc + (row[col] !== undefined ? 1 : 0), 0);
   const effective = store.getEffectiveConfig(idx);
   const config = editingLabelIdx !== null ? effective.config : store.config;
   const barcodeField = editingLabelIdx !== null ? effective.barcodeField : store.barcodeField;
@@ -342,12 +354,17 @@ export default function ConfigSidebar() {
 
               {expandedField === f.column && (
                 <div className="p-3 pt-0 border-t border-gray-100 mt-2 space-y-4">
-                  {/* Text content + line breaks + inline bold (per-label) */}
+                  {/* Text content + line breaks + inline bold (per-label or all labels) */}
                   <div className="space-y-1.5 pt-3">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center flex-wrap gap-2">
                       <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
                         Text (Label #{idx + 1})
                       </label>
+                      {overrideCountFor(f.column) > 0 && (
+                        <span className="text-[9px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded-md">
+                          {overrideCountFor(f.column)}/{data.length} overridden
+                        </span>
+                      )}
                       <button
                         onClick={() => wrapSelectionBold(f.column)}
                         title="Wrap selected text in **bold**"
@@ -355,16 +372,6 @@ export default function ConfigSidebar() {
                       >
                         B
                       </button>
-                      {hasOverride(f.column) && (
-                        <button
-                          onClick={() => clearDataOverride(idx, f.column)}
-                          title="Reset to original Excel value"
-                          className="flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-amber-50 border border-amber-200 text-amber-700 text-[9px] font-bold hover:bg-amber-100 transition-colors"
-                        >
-                          <Undo2 size={10} />
-                          Reset
-                        </button>
-                      )}
                     </div>
                     <textarea
                       ref={(el) => { textareaRefs.current[f.column] = el; }}
@@ -374,9 +381,49 @@ export default function ConfigSidebar() {
                       placeholder="(empty)"
                       className="w-full bg-gray-50 border border-gray-200 rounded-lg py-2 px-2.5 text-xs text-gray-800 font-mono leading-relaxed focus:outline-none focus:ring-2 focus:ring-dk-blue/30 focus:border-dk-blue transition-all resize-y"
                     />
+
+                    {/* Scope controls: apply to one label vs. all */}
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        onClick={() => handleApplyToAll(f.column)}
+                        disabled={data.length === 0}
+                        className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-violet-50 border border-violet-200 text-violet-700 text-[10px] font-bold hover:bg-violet-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        title="Copy this exact text (with line breaks and bold) to every label"
+                      >
+                        <Layers size={11} />
+                        Apply to All {data.length} Labels
+                      </button>
+                      {hasOverride(f.column) && (
+                        <button
+                          onClick={() => clearDataOverride(idx, f.column)}
+                          title="Reset this label only"
+                          className="flex items-center gap-1 px-2 py-1 rounded-md bg-amber-50 border border-amber-200 text-amber-700 text-[10px] font-bold hover:bg-amber-100 transition-colors"
+                        >
+                          <Undo2 size={11} />
+                          Reset This
+                        </button>
+                      )}
+                      {overrideCountFor(f.column) > 0 && (
+                        <button
+                          onClick={() => clearDataOverrideForColumn(f.column)}
+                          title="Reset this field on every label"
+                          className="flex items-center gap-1 px-2 py-1 rounded-md bg-red-50 border border-red-200 text-red-600 text-[10px] font-bold hover:bg-red-100 transition-colors"
+                        >
+                          <Undo2 size={11} />
+                          Reset All
+                        </button>
+                      )}
+                      {appliedFlash?.column === f.column && (
+                        <span className="flex items-center gap-1 px-2 py-1 rounded-md bg-green-50 border border-green-200 text-green-700 text-[10px] font-bold">
+                          <Check size={11} />
+                          Applied to {appliedFlash.count} label{appliedFlash.count !== 1 ? 's' : ''}
+                        </span>
+                      )}
+                    </div>
+
                     <p className="flex items-center gap-1 text-[10px] text-gray-400">
                       <CornerDownLeft size={10} />
-                      <span><span className="font-bold text-gray-600">Enter</span> = new line. Wrap in <span className="font-bold text-gray-600">**double asterisks**</span> for bold (or select text and click <span className="font-bold text-gray-600">B</span>).</span>
+                      <span><span className="font-bold text-gray-600">Enter</span> = new line. Wrap in <span className="font-bold text-gray-600">**double asterisks**</span> for bold (or select text and click <span className="font-bold text-gray-600">B</span>). Use <span className="font-bold text-gray-600">Apply to All</span> if every label should read the same.</span>
                     </p>
                   </div>
 

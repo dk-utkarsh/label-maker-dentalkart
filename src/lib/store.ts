@@ -173,6 +173,8 @@ interface LabelState {
   clearLabelOverride: (idx: number) => void;
   setDataOverride: (idx: number, column: string, value: string) => void;
   clearDataOverride: (idx: number, column?: string) => void;
+  applyDataOverrideToAll: (column: string, value: string) => number;
+  clearDataOverrideForColumn: (column: string) => void;
   getValue: (idx: number, column: string) => string;
   getLayoutSnapshot: () => LayoutSnapshot;
   setLayoutSnapshot: (snapshot: LayoutSnapshot) => void;
@@ -477,6 +479,27 @@ export const useStore = create<LabelState>((set, get) => ({
       delete forIdx[column];
       if (Object.keys(forIdx).length === 0) delete updated[idx];
       else updated[idx] = forIdx;
+    }
+    return { dataOverrides: updated };
+  }),
+
+  applyDataOverrideToAll: (column, value) => {
+    const state = get();
+    const count = state.data.length;
+    const updated = { ...state.dataOverrides };
+    for (let i = 0; i < count; i++) {
+      updated[i] = { ...(updated[i] || {}), [column]: value };
+    }
+    set({ dataOverrides: updated });
+    return count;
+  },
+
+  clearDataOverrideForColumn: (column) => set((state) => {
+    const updated: Record<number, Record<string, string>> = {};
+    for (const [k, forIdx] of Object.entries(state.dataOverrides)) {
+      const { [column]: _drop, ...rest } = forIdx;
+      void _drop;
+      if (Object.keys(rest).length > 0) updated[Number(k)] = rest;
     }
     return { dataOverrides: updated };
   }),
