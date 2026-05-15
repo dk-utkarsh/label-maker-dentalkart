@@ -457,17 +457,17 @@ export default function Home() {
         <div className="h-1 bg-gradient-to-r from-dk-orange via-dk-blue to-dk-orange" />
         <div className="max-w-[1800px] mx-auto px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-dk-orange to-dk-blue flex items-center justify-center shadow-md">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
-              </svg>
-            </div>
+            <img
+              src="/dentalkart-logo.svg"
+              alt="Dentalkart.com"
+              className="h-9 w-auto"
+            />
+            <div className="h-9 w-px bg-gray-200" aria-hidden />
             <div>
-              <h1 className="text-lg font-bold tracking-tight">
-                <span className="text-dk-blue">Dentalkart</span>{' '}
-                <span className="text-dk-orange">Label Maker</span>
+              <h1 className="text-base font-bold tracking-tight text-dk-orange leading-none">
+                Label Maker
               </h1>
-              <p className="text-[10px] text-gray-400 font-semibold uppercase tracking-widest leading-none">High-Precision Generator</p>
+              <p className="text-[10px] text-gray-400 font-semibold uppercase tracking-widest leading-none mt-1">High-Precision Generator</p>
             </div>
           </div>
 
