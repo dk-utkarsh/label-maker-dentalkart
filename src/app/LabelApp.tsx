@@ -152,7 +152,8 @@ export default function Home() {
       const doc = new jsPDF({
         orientation: width > height ? 'landscape' : 'portrait',
         unit: 'mm',
-        format: [width, height]
+        format: [width, height],
+        compress: true,
       });
 
       const previewEl = document.querySelector('.label-preview-container') as HTMLElement;
@@ -199,8 +200,10 @@ export default function Home() {
 
         let canvas: HTMLCanvasElement;
         try {
+          // pixelRatio 2 → ~450 DPI at this canvas size, well above print quality.
+          // pixelRatio 3 + PNG overflowed V8's 512 MB string cap on 100-label runs.
           canvas = await toCanvas(target, {
-            pixelRatio: 3,
+            pixelRatio: 2,
             backgroundColor: '#ffffff',
             fontEmbedCSS,
           });
@@ -208,8 +211,9 @@ export default function Home() {
           throw new Error(`Label #${currentLabel} render failed: ${e instanceof Error ? e.message : String(e)}`);
         }
 
-        const imgData = canvas.toDataURL('image/png');
-        doc.addImage(imgData, 'PNG', 0, 0, width, height);
+        // JPEG at q=0.95 is ~5-8x smaller than PNG for label content and keeps text crisp.
+        const imgData = canvas.toDataURL('image/jpeg', 0.95);
+        doc.addImage(imgData, 'JPEG', 0, 0, width, height, undefined, 'FAST');
 
         if (i < data.length - 1) {
           doc.addPage([width, height]);
