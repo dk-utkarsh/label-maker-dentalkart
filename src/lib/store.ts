@@ -92,6 +92,7 @@ export interface SavedVariation {
   logoSize: number;
   topRule?: boolean;
   outerBorder?: boolean;
+  pinFooter?: boolean;
   timestamp: number;
 }
 
@@ -111,6 +112,7 @@ export interface LayoutSnapshot {
   logoSize: number;
   topRule: boolean;
   outerBorder: boolean;
+  pinFooter: boolean;
   activeLayout: string;
   labelOverrides: Record<number, LabelOverride>;
 }
@@ -134,6 +136,7 @@ interface LabelState {
   codeAlign: CodeAlign;
   topRule: boolean;
   outerBorder: boolean;
+  pinFooter: boolean;
   activeLayout: string;
   savedVariations: SavedVariation[];
   labelOverrides: Record<number, LabelOverride>;
@@ -159,6 +162,7 @@ interface LabelState {
   reorderConfig: (from: number, to: number) => void;
   setTopRule: (v: boolean) => void;
   setOuterBorder: (v: boolean) => void;
+  setPinFooter: (v: boolean) => void;
   applyLayout: (presetId: string) => void;
   saveVariation: (name: string) => void;
   loadVariation: (id: string) => void;
@@ -238,6 +242,7 @@ export const useStore = create<LabelState>((set, get) => ({
   codeAlign: 'center' as CodeAlign,
   topRule: false,
   outerBorder: true,
+  pinFooter: true,
   activeLayout: 'custom',
   savedVariations: [],
   labelOverrides: {},
@@ -351,6 +356,7 @@ export const useStore = create<LabelState>((set, get) => ({
   }),
   setTopRule: (topRule) => set({ topRule }),
   setOuterBorder: (outerBorder) => set({ outerBorder }),
+  setPinFooter: (pinFooter) => set({ pinFooter }),
   applyLayout: (presetId) => {
     const s = get();
     if (!s.columns.length) return;
@@ -386,6 +392,7 @@ export const useStore = create<LabelState>((set, get) => ({
       logoSize: s.logoSize,
       topRule: s.topRule,
       outerBorder: s.outerBorder,
+      pinFooter: s.pinFooter,
       timestamp: Date.now(),
     };
     const updated = [...s.savedVariations, variation];
@@ -428,6 +435,7 @@ export const useStore = create<LabelState>((set, get) => ({
       logoPosition: v.logoPosition ?? s.logoPosition,
       topRule: v.topRule ?? s.topRule,
       outerBorder: v.outerBorder ?? s.outerBorder,
+      pinFooter: v.pinFooter ?? s.pinFooter,
       // Keep user's current logo — don't overwrite with saved layout's logo
     });
   },
@@ -499,6 +507,7 @@ export const useStore = create<LabelState>((set, get) => ({
       logoSize: s.logoSize,
       topRule: s.topRule,
       outerBorder: s.outerBorder,
+      pinFooter: s.pinFooter,
       activeLayout: s.activeLayout,
       labelOverrides: structuredClone(s.labelOverrides),
     };
@@ -521,6 +530,7 @@ export const useStore = create<LabelState>((set, get) => ({
       logoSize: snapshot.logoSize,
       topRule: snapshot.topRule,
       outerBorder: snapshot.outerBorder ?? true,
+      pinFooter: snapshot.pinFooter ?? true,
       activeLayout: snapshot.activeLayout,
       labelOverrides: structuredClone(snapshot.labelOverrides),
       editingLabelIdx: null,

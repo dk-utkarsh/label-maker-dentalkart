@@ -5,9 +5,21 @@ import JsBarcode from 'jsbarcode';
 import QRCode from 'qrcode';
 import { useStore } from '@/lib/store';
 
+/** Parse **bold** markdown spans. Newlines are preserved by white-space: pre-wrap on the container. */
+function parseInline(text: string): React.ReactNode {
+  if (!text || !text.includes('**')) return text;
+  const parts = text.split(/(\*\*[^*\n]+\*\*)/g);
+  return parts.map((part, i) => {
+    if (part.length >= 4 && part.startsWith('**') && part.endsWith('**')) {
+      return <strong key={i} style={{ fontWeight: 700 }}>{part.slice(2, -2)}</strong>;
+    }
+    return part;
+  });
+}
+
 export default function LabelPreview({ overrideIdx }: { overrideIdx?: number } = {}) {
   const store = useStore();
-  const { width, height, data, previewIdx, topRule, outerBorder } = store;
+  const { width, height, data, previewIdx, topRule, outerBorder, pinFooter } = store;
   const idx = overrideIdx ?? previewIdx;
   const effective = store.getEffectiveConfig(idx);
   const { config, logo, logoPosition, logoSize, bannerText, barcodeField, barcodeOrder, barcodeSize, qrSize, codeType, codeAlign } = effective;
@@ -136,7 +148,7 @@ export default function LabelPreview({ overrideIdx }: { overrideIdx?: number } =
     return (
       <>
         {f.showLabel && <span style={{ fontWeight: 700, color: '#000' }}>{f.column}: </span>}
-        {formatted}
+        {parseInline(formatted)}
       </>
     );
   };
@@ -166,7 +178,7 @@ export default function LabelPreview({ overrideIdx }: { overrideIdx?: number } =
         className="text-[#111]"
       >
         {f.showLabel && <span className="font-bold text-[#000]">{f.column}: </span>}
-        {formatted}
+        {parseInline(formatted)}
       </div>
     );
   };
@@ -257,7 +269,7 @@ export default function LabelPreview({ overrideIdx }: { overrideIdx?: number } =
                       }}
                     >
                       {f.showLabel && <span style={{ fontWeight: 700 }}>{f.column}: </span>}
-                      {formatted}
+                      {parseInline(formatted)}
                     </div>
                   );
                 })}
@@ -387,19 +399,19 @@ export default function LabelPreview({ overrideIdx }: { overrideIdx?: number } =
         {/* Barcode: after-title (default) */}
         {barcodeSection === 'after-title' && codeElement}
 
-        {/* Body — takes remaining vertical space */}
-        <div style={{ flex: 1 }}>
+        {/* Body — takes remaining vertical space only when footer is pinned */}
+        <div style={{ flex: pinFooter ? 1 : undefined }}>
           {renderBodySection()}
         </div>
 
         {/* Barcode: after-body */}
         {barcodeSection === 'after-body' && codeElement}
 
-        {/* Footers — pinned to bottom */}
+        {/* Footers — pinned to bottom or flowing inline */}
         {hasFooters && (
           <div
             style={{
-              marginTop: 'auto',
+              marginTop: pinFooter ? 'auto' : undefined,
               paddingTop: `${sectionGap}px`,
               borderTop: '1px solid #ddd',
             }}

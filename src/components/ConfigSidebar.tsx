@@ -10,11 +10,30 @@ type DisplayItem =
 
 export default function ConfigSidebar() {
   const store = useStore();
-  const { setConfig, updateField, setBarcodeField, setBarcodeOrder, setBarcodeSize, setQrSize, setCodeType, setCodeAlign, setBannerText, setOuterBorder, columns, editingLabelIdx, previewIdx, dataOverrides, setDataOverride, clearDataOverride, data } = store;
+  const { setConfig, updateField, setBarcodeField, setBarcodeOrder, setBarcodeSize, setQrSize, setCodeType, setCodeAlign, setBannerText, setOuterBorder, setPinFooter, columns, editingLabelIdx, previewIdx, dataOverrides, setDataOverride, clearDataOverride, data } = store;
   const idx = editingLabelIdx ?? previewIdx;
   const rawValue = (col: string) => String(data[idx]?.[col] ?? '');
   const displayValue = (col: string) => dataOverrides[idx]?.[col] ?? rawValue(col);
   const hasOverride = (col: string) => dataOverrides[idx]?.[col] !== undefined;
+
+  const textareaRefs = useRef<Record<string, HTMLTextAreaElement | null>>({});
+
+  const wrapSelectionBold = (col: string) => {
+    const ta = textareaRefs.current[col];
+    if (!ta) return;
+    const start = ta.selectionStart;
+    const end = ta.selectionEnd;
+    const text = displayValue(col);
+    const selected = text.slice(start, end);
+    const replacement = selected || 'bold text';
+    const newText = text.slice(0, start) + `**${replacement}**` + text.slice(end);
+    setDataOverride(idx, col, newText);
+    requestAnimationFrame(() => {
+      ta.focus();
+      const inner = start + 2;
+      ta.setSelectionRange(inner, inner + replacement.length);
+    });
+  };
   const effective = store.getEffectiveConfig(idx);
   const config = editingLabelIdx !== null ? effective.config : store.config;
   const barcodeField = editingLabelIdx !== null ? effective.barcodeField : store.barcodeField;
@@ -110,6 +129,20 @@ export default function ConfigSidebar() {
               className={`relative w-10 h-5 rounded-full transition-colors ${store.outerBorder ? 'bg-dk-blue' : 'bg-gray-300'}`}
             >
               <span className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${store.outerBorder ? 'translate-x-5' : ''}`} />
+            </button>
+          </div>
+
+          {/* Pin Footer Toggle — when off, footer rows flow tight against body instead of being pushed to bottom */}
+          <div className="flex items-center justify-between">
+            <div className="flex flex-col">
+              <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Pin Footer to Bottom</label>
+              <span className="text-[10px] text-gray-400">Turn off to remove blank gap before footer</span>
+            </div>
+            <button
+              onClick={() => setPinFooter(!store.pinFooter)}
+              className={`relative w-10 h-5 rounded-full transition-colors shrink-0 ${store.pinFooter ? 'bg-dk-blue' : 'bg-gray-300'}`}
+            >
+              <span className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${store.pinFooter ? 'translate-x-5' : ''}`} />
             </button>
           </div>
 
@@ -309,17 +342,24 @@ export default function ConfigSidebar() {
 
               {expandedField === f.column && (
                 <div className="p-3 pt-0 border-t border-gray-100 mt-2 space-y-4">
-                  {/* Text content + line breaks (per-label) */}
+                  {/* Text content + line breaks + inline bold (per-label) */}
                   <div className="space-y-1.5 pt-3">
                     <div className="flex items-center gap-2">
                       <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
                         Text (Label #{idx + 1})
                       </label>
+                      <button
+                        onClick={() => wrapSelectionBold(f.column)}
+                        title="Wrap selected text in **bold**"
+                        className="ml-auto flex items-center gap-1 px-2 py-0.5 rounded-md bg-gray-100 border border-gray-200 text-gray-700 text-[10px] font-black hover:bg-dk-blue-light hover:border-dk-blue/30 hover:text-dk-blue transition-colors"
+                      >
+                        B
+                      </button>
                       {hasOverride(f.column) && (
                         <button
                           onClick={() => clearDataOverride(idx, f.column)}
                           title="Reset to original Excel value"
-                          className="ml-auto flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-amber-50 border border-amber-200 text-amber-700 text-[9px] font-bold hover:bg-amber-100 transition-colors"
+                          className="flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-amber-50 border border-amber-200 text-amber-700 text-[9px] font-bold hover:bg-amber-100 transition-colors"
                         >
                           <Undo2 size={10} />
                           Reset
@@ -327,6 +367,7 @@ export default function ConfigSidebar() {
                       )}
                     </div>
                     <textarea
+                      ref={(el) => { textareaRefs.current[f.column] = el; }}
                       value={displayValue(f.column)}
                       onChange={(e) => setDataOverride(idx, f.column, e.target.value)}
                       rows={Math.min(6, Math.max(2, displayValue(f.column).split('\n').length + 1))}
@@ -335,7 +376,7 @@ export default function ConfigSidebar() {
                     />
                     <p className="flex items-center gap-1 text-[10px] text-gray-400">
                       <CornerDownLeft size={10} />
-                      Press <span className="font-bold text-gray-600">Enter</span> to break to a new line — applies only to this label.
+                      <span><span className="font-bold text-gray-600">Enter</span> = new line. Wrap in <span className="font-bold text-gray-600">**double asterisks**</span> for bold (or select text and click <span className="font-bold text-gray-600">B</span>).</span>
                     </p>
                   </div>
 
