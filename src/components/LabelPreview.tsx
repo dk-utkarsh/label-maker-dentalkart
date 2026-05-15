@@ -6,8 +6,9 @@ import QRCode from 'qrcode';
 import { useStore } from '@/lib/store';
 
 /** Parse **bold** markdown spans. Newlines are preserved by white-space: pre-wrap on the container. */
-function parseInline(text: string): React.ReactNode {
-  if (!text || !text.includes('**')) return text;
+function parseInline(text: unknown): React.ReactNode {
+  if (typeof text !== 'string' || text.length === 0) return text == null ? '' : String(text);
+  if (!text.includes('**')) return text;
   const parts = text.split(/(\*\*[^*\n]+\*\*)/g);
   return parts.map((part, i) => {
     if (part.length >= 4 && part.startsWith('**') && part.endsWith('**')) {

@@ -133,10 +133,17 @@ export default function Home() {
     }
   };
 
+  /** Wait for React to flush state and the browser to paint before capture. */
+  const waitForPaint = () =>
+    new Promise<void>(resolve => {
+      requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+    });
+
   const generatePDF = async () => {
     if (!data.length) return;
     setIsGenerating(true);
     setPdfProgress(0);
+    let currentLabel = 0;
 
     try {
       const jsPDF = (await import('jspdf')).default;
@@ -149,7 +156,7 @@ export default function Home() {
       });
 
       const previewEl = document.querySelector('.label-preview-container') as HTMLElement;
-      if (!previewEl) throw new Error('Preview container not found');
+      if (!previewEl) throw new Error('Preview container not found in DOM');
 
       // Exit per-label edit mode before generating
       setEditingLabelIdx(null);
@@ -159,12 +166,16 @@ export default function Home() {
       const fontEmbedCSS = await buildFontEmbedCSS();
 
       for (let i = 0; i < data.length; i++) {
+        currentLabel = i + 1;
         setPreviewIdx(i);
         setPdfProgress(Math.round(((i + 1) / data.length) * 100));
-        await new Promise(r => setTimeout(r, 150));
+
+        // Two RAFs guarantee React has committed and the browser has painted.
+        await waitForPaint();
+        await waitForPaint();
 
         const target = previewEl.querySelector('.label-content') as HTMLElement;
-        if (!target) continue;
+        if (!target) throw new Error(`Label #${currentLabel}: .label-content not found after re-render`);
 
         const sanitize = (node: HTMLElement) => {
           const walker = document.createTreeWalker(node, NodeFilter.SHOW_ELEMENT);
@@ -186,11 +197,16 @@ export default function Home() {
         };
         sanitize(target);
 
-        const canvas = await toCanvas(target, {
-          pixelRatio: 3,
-          backgroundColor: '#ffffff',
-          fontEmbedCSS,
-        });
+        let canvas: HTMLCanvasElement;
+        try {
+          canvas = await toCanvas(target, {
+            pixelRatio: 3,
+            backgroundColor: '#ffffff',
+            fontEmbedCSS,
+          });
+        } catch (e) {
+          throw new Error(`Label #${currentLabel} render failed: ${e instanceof Error ? e.message : String(e)}`);
+        }
 
         const imgData = canvas.toDataURL('image/png');
         doc.addImage(imgData, 'PNG', 0, 0, width, height);
@@ -202,8 +218,9 @@ export default function Home() {
 
       doc.save('labels.pdf');
     } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
       console.error('PDF Generation failed:', error);
-      alert('Failed to generate PDF. Please check the console for details.');
+      alert(`Failed to generate PDF at label #${currentLabel} of ${data.length}.\n\n${msg}\n\nOpen the browser console (F12) for the full stack trace and share it.`);
     } finally {
       setIsGenerating(false);
       setPdfProgress(0);
@@ -215,6 +232,7 @@ export default function Home() {
     if (!data.length) return;
     setIsGenerating(true);
     setPdfProgress(0);
+    let currentLabel = 0;
 
     try {
       const JSZip = (await import('jszip')).default;
@@ -222,7 +240,7 @@ export default function Home() {
       const zip = new JSZip();
 
       const previewEl = document.querySelector('.label-preview-container') as HTMLElement;
-      if (!previewEl) throw new Error('Preview container not found');
+      if (!previewEl) throw new Error('Preview container not found in DOM');
 
       setEditingLabelIdx(null);
 
@@ -231,12 +249,15 @@ export default function Home() {
       const fontEmbedCSS = await buildFontEmbedCSS();
 
       for (let i = 0; i < data.length; i++) {
+        currentLabel = i + 1;
         setPreviewIdx(i);
         setPdfProgress(Math.round(((i + 1) / data.length) * 100));
-        await new Promise(r => setTimeout(r, 150));
+
+        await waitForPaint();
+        await waitForPaint();
 
         const target = previewEl.querySelector('.label-content') as HTMLElement;
-        if (!target) continue;
+        if (!target) throw new Error(`Label #${currentLabel}: .label-content not found after re-render`);
 
         const sanitize = (node: HTMLElement) => {
           const walker = document.createTreeWalker(node, NodeFilter.SHOW_ELEMENT);
@@ -262,11 +283,16 @@ export default function Home() {
         const scale = Math.min(550 / width, 750 / height);
         const dpiRatio = Math.max(3, Math.ceil(500 / (25.4 * scale)));
 
-        const canvas = await toCanvas(target, {
-          pixelRatio: dpiRatio,
-          backgroundColor: '#ffffff',
-          fontEmbedCSS,
-        });
+        let canvas: HTMLCanvasElement;
+        try {
+          canvas = await toCanvas(target, {
+            pixelRatio: dpiRatio,
+            backgroundColor: '#ffffff',
+            fontEmbedCSS,
+          });
+        } catch (e) {
+          throw new Error(`Label #${currentLabel} render failed: ${e instanceof Error ? e.message : String(e)}`);
+        }
 
         // Inject 500 DPI (pHYs chunk) into PNG
         const pngBuf = await new Promise<ArrayBuffer>(resolve => {
@@ -284,8 +310,9 @@ export default function Home() {
       a.click();
       URL.revokeObjectURL(url);
     } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
       console.error('ZIP Generation failed:', error);
-      alert('Failed to generate ZIP. Please check the console for details.');
+      alert(`Failed to generate ZIP at label #${currentLabel} of ${data.length}.\n\n${msg}\n\nOpen the browser console (F12) for the full stack trace and share it.`);
     } finally {
       setIsGenerating(false);
       setPdfProgress(0);
