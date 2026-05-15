@@ -1,7 +1,7 @@
 'use client';
 
 import { useStore, type FieldRole, type FontSize, type FontWeight, type Alignment, FONT_FAMILIES } from '@/lib/store';
-import { Settings2, Type, ChevronDown, ChevronUp, AlignLeft, AlignCenter, AlignRight, CaseSensitive, Square, Columns, GripVertical, Barcode, SplitSquareVertical, Minus } from 'lucide-react';
+import { Settings2, Type, ChevronDown, ChevronUp, AlignLeft, AlignCenter, AlignRight, CaseSensitive, Square, Columns, GripVertical, Barcode, SplitSquareVertical, Minus, CornerDownLeft, Undo2 } from 'lucide-react';
 import { useState, useRef, useMemo } from 'react';
 
 type DisplayItem =
@@ -10,8 +10,11 @@ type DisplayItem =
 
 export default function ConfigSidebar() {
   const store = useStore();
-  const { setConfig, updateField, setBarcodeField, setBarcodeOrder, setBarcodeSize, setQrSize, setCodeType, setCodeAlign, setBannerText, setOuterBorder, columns, editingLabelIdx, previewIdx } = store;
+  const { setConfig, updateField, setBarcodeField, setBarcodeOrder, setBarcodeSize, setQrSize, setCodeType, setCodeAlign, setBannerText, setOuterBorder, columns, editingLabelIdx, previewIdx, dataOverrides, setDataOverride, clearDataOverride, data } = store;
   const idx = editingLabelIdx ?? previewIdx;
+  const rawValue = (col: string) => String(data[idx]?.[col] ?? '');
+  const displayValue = (col: string) => dataOverrides[idx]?.[col] ?? rawValue(col);
+  const hasOverride = (col: string) => dataOverrides[idx]?.[col] !== undefined;
   const effective = store.getEffectiveConfig(idx);
   const config = editingLabelIdx !== null ? effective.config : store.config;
   const barcodeField = editingLabelIdx !== null ? effective.barcodeField : store.barcodeField;
@@ -306,6 +309,36 @@ export default function ConfigSidebar() {
 
               {expandedField === f.column && (
                 <div className="p-3 pt-0 border-t border-gray-100 mt-2 space-y-4">
+                  {/* Text content + line breaks (per-label) */}
+                  <div className="space-y-1.5 pt-3">
+                    <div className="flex items-center gap-2">
+                      <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                        Text (Label #{idx + 1})
+                      </label>
+                      {hasOverride(f.column) && (
+                        <button
+                          onClick={() => clearDataOverride(idx, f.column)}
+                          title="Reset to original Excel value"
+                          className="ml-auto flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-amber-50 border border-amber-200 text-amber-700 text-[9px] font-bold hover:bg-amber-100 transition-colors"
+                        >
+                          <Undo2 size={10} />
+                          Reset
+                        </button>
+                      )}
+                    </div>
+                    <textarea
+                      value={displayValue(f.column)}
+                      onChange={(e) => setDataOverride(idx, f.column, e.target.value)}
+                      rows={Math.min(6, Math.max(2, displayValue(f.column).split('\n').length + 1))}
+                      placeholder="(empty)"
+                      className="w-full bg-gray-50 border border-gray-200 rounded-lg py-2 px-2.5 text-xs text-gray-800 font-mono leading-relaxed focus:outline-none focus:ring-2 focus:ring-dk-blue/30 focus:border-dk-blue transition-all resize-y"
+                    />
+                    <p className="flex items-center gap-1 text-[10px] text-gray-400">
+                      <CornerDownLeft size={10} />
+                      Press <span className="font-bold text-gray-600">Enter</span> to break to a new line — applies only to this label.
+                    </p>
+                  </div>
+
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-1.5">
                       <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Role</label>

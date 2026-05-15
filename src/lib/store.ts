@@ -137,6 +137,7 @@ interface LabelState {
   activeLayout: string;
   savedVariations: SavedVariation[];
   labelOverrides: Record<number, LabelOverride>;
+  dataOverrides: Record<number, Record<string, string>>;
   editingLabelIdx: number | null; // null = global editing
 
   // Actions
@@ -166,6 +167,9 @@ interface LabelState {
   setEditingLabelIdx: (idx: number | null) => void;
   setLabelOverride: (idx: number, override: LabelOverride) => void;
   clearLabelOverride: (idx: number) => void;
+  setDataOverride: (idx: number, column: string, value: string) => void;
+  clearDataOverride: (idx: number, column?: string) => void;
+  getValue: (idx: number, column: string) => string;
   getLayoutSnapshot: () => LayoutSnapshot;
   setLayoutSnapshot: (snapshot: LayoutSnapshot) => void;
   getEffectiveConfig: (idx: number) => {
@@ -237,6 +241,7 @@ export const useStore = create<LabelState>((set, get) => ({
   activeLayout: 'custom',
   savedVariations: [],
   labelOverrides: {},
+  dataOverrides: {},
   editingLabelIdx: null,
 
   setDimensions: (width, height) => set({ width, height }),
@@ -449,6 +454,32 @@ export const useStore = create<LabelState>((set, get) => ({
     delete updated[idx];
     return { labelOverrides: updated };
   }),
+
+  setDataOverride: (idx, column, value) => set((state) => {
+    const forIdx = { ...(state.dataOverrides[idx] || {}), [column]: value };
+    return { dataOverrides: { ...state.dataOverrides, [idx]: forIdx } };
+  }),
+
+  clearDataOverride: (idx, column) => set((state) => {
+    const updated = { ...state.dataOverrides };
+    if (column === undefined) {
+      delete updated[idx];
+    } else if (updated[idx]) {
+      const forIdx = { ...updated[idx] };
+      delete forIdx[column];
+      if (Object.keys(forIdx).length === 0) delete updated[idx];
+      else updated[idx] = forIdx;
+    }
+    return { dataOverrides: updated };
+  }),
+
+  getValue: (idx, column) => {
+    const s = get();
+    const override = s.dataOverrides[idx]?.[column];
+    if (override !== undefined) return override;
+    const row = s.data[idx];
+    return row ? String(row[column] ?? '') : '';
+  },
 
   getLayoutSnapshot: () => {
     const s = get();

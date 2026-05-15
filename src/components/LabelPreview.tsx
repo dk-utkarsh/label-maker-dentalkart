@@ -16,6 +16,9 @@ export default function LabelPreview({ overrideIdx }: { overrideIdx?: number } =
 
   const row = data[idx] || {};
   const activeFields = config.filter(f => f.role !== 'hidden');
+  // Look up display value with per-label overrides (preserves manual line breaks).
+  // Barcode/QR sources deliberately read `row` directly — newlines must never enter encoded codes.
+  const valueOf = (column: string) => store.getValue(idx, column);
 
   // Scale mm → preview pixels
   const maxW = 550;
@@ -128,8 +131,8 @@ export default function LabelPreview({ overrideIdx }: { overrideIdx?: number } =
   };
 
   const renderFieldContent = (f: any, role: string) => {
-    const val = row[f.column] || '';
-    const formatted = (f.prefix || '') + (f.uppercase ? String(val).toUpperCase() : val) + (f.suffix || '');
+    const val = valueOf(f.column);
+    const formatted = (f.prefix || '') + (f.uppercase ? val.toUpperCase() : val) + (f.suffix || '');
     return (
       <>
         {f.showLabel && <span style={{ fontWeight: 700, color: '#000' }}>{f.column}: </span>}
@@ -139,10 +142,10 @@ export default function LabelPreview({ overrideIdx }: { overrideIdx?: number } =
   };
 
   const renderField = (f: any, role: string, isSameRow = false) => {
-    const val = row[f.column] || '';
+    const val = valueOf(f.column);
     if (!val && !f.border) return null;
     const fontSize = getFs(f, role);
-    const formatted = (f.prefix || '') + (f.uppercase ? String(val).toUpperCase() : val) + (f.suffix || '');
+    const formatted = (f.prefix || '') + (f.uppercase ? val.toUpperCase() : val) + (f.suffix || '');
 
     return (
       <div
@@ -154,6 +157,7 @@ export default function LabelPreview({ overrideIdx }: { overrideIdx?: number } =
           textAlign: f.align,
           lineHeight: 1.3,
           wordBreak: 'break-word',
+          whiteSpace: 'pre-wrap',
           width: isSameRow ? undefined : '100%',
           flex: isSameRow ? 1 : undefined,
           border: f.border ? '1px solid #ccc' : 'none',
@@ -233,8 +237,8 @@ export default function LabelPreview({ overrideIdx }: { overrideIdx?: number } =
               >
                 {grpRow.map((f: any, fi: number) => {
                   const fontSize = getFs(f, 'body');
-                  const val = row[f.column] || '';
-                  const formatted = (f.prefix || '') + (f.uppercase ? String(val).toUpperCase() : val) + (f.suffix || '');
+                  const val = valueOf(f.column);
+                  const formatted = (f.prefix || '') + (f.uppercase ? val.toUpperCase() : val) + (f.suffix || '');
                   return (
                     <div
                       key={f.column}
@@ -248,6 +252,7 @@ export default function LabelPreview({ overrideIdx }: { overrideIdx?: number } =
                         textAlign: f.align,
                         lineHeight: 1.35,
                         wordBreak: 'break-word',
+                        whiteSpace: 'pre-wrap',
                         color: '#111',
                       }}
                     >
