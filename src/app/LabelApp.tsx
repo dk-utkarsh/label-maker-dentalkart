@@ -6,19 +6,72 @@ import UploadSection from '@/components/UploadSection';
 import ConfigSidebar from '@/components/ConfigSidebar';
 import LabelPreview from '@/components/LabelPreview';
 import LayoutSelector from '@/components/LayoutSelector';
-import { Download, ChevronLeft, ChevronRight, Save, Trash2, RotateCcw, Eye, Layers, X, CheckCircle, Loader2, FileSpreadsheet, Palette, Printer, Pencil, Globe, Undo2, Copy, Check, ImageDown } from 'lucide-react';
+import { Download, ChevronLeft, ChevronRight, Save, Trash2, RotateCcw, Eye, Layers, X, CheckCircle, Loader2, FileSpreadsheet, Palette, Printer, Pencil, Globe, Undo2, Copy, Check, ImageDown, AlertTriangle } from 'lucide-react';
 import { HeroSection } from '@/components/ui/hero-section';
 
 export default function Home() {
   const { data, previewIdx, setPreviewIdx, width, height, config, savedVariations, saveVariation, loadVariation, deleteVariation, fetchSavedVariations, editingLabelIdx, setEditingLabelIdx, labelOverrides, clearLabelOverride, setLabelOverride, getEffectiveConfig } = useStore();
   const [isGenerating, setIsGenerating] = useState(false);
   const [pdfProgress, setPdfProgress] = useState(0);
+  const [generationLabel, setGenerationLabel] = useState<'PDF' | 'ZIP'>('PDF');
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [variationName, setVariationName] = useState('');
   const [showApplyModal, setShowApplyModal] = useState(false);
   const [selectedLabels, setSelectedLabels] = useState<Set<number>>(new Set());
   const nameInputRef = useRef<HTMLInputElement>(null);
   const uploadRef = useRef<HTMLDivElement>(null);
+  const isGeneratingRef = useRef(false);
+  const wakeLockRef = useRef<WakeLockSentinel | null>(null);
+
+  // Mirror state into ref so beforeunload (which fires outside React's render cycle) can read it.
+  useEffect(() => { isGeneratingRef.current = isGenerating; }, [isGenerating]);
+
+  // Warn the user before they close / reload / navigate away while a generation is in progress.
+  // This is the strongest client-side protection available — the browser shows a confirmation
+  // and won't kill the JS context until the user explicitly confirms leaving.
+  useEffect(() => {
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (!isGeneratingRef.current) return;
+      e.preventDefault();
+      e.returnValue = 'Labels are still being generated. Leaving now will cancel the export.';
+    };
+    window.addEventListener('beforeunload', onBeforeUnload);
+    return () => window.removeEventListener('beforeunload', onBeforeUnload);
+  }, []);
+
+  /** Request a screen wake lock so the browser doesn't suspend the tab during long exports. */
+  const acquireWakeLock = async () => {
+    try {
+      const wl = await (navigator as Navigator & { wakeLock?: { request: (t: string) => Promise<WakeLockSentinel> } })
+        .wakeLock?.request('screen');
+      if (wl) wakeLockRef.current = wl;
+    } catch {
+      // Wake Lock API unsupported or denied — non-fatal.
+    }
+  };
+  const releaseWakeLock = async () => {
+    try { await wakeLockRef.current?.release(); } catch { /* ignore */ }
+    wakeLockRef.current = null;
+  };
+
+  /** Notify user when generation finishes, useful if they switched tabs. */
+  const notifyDone = (kind: 'PDF' | 'ZIP', count: number) => {
+    if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
+    try {
+      new Notification('Labels ready', {
+        body: `${count} label${count !== 1 ? 's' : ''} exported as ${kind}.`,
+        icon: '/favicon.ico',
+      });
+    } catch { /* ignore */ }
+  };
+
+  /** Best-effort request for notification permission before a long generation starts. */
+  const requestNotificationPermissionOnce = () => {
+    if (typeof Notification === 'undefined') return;
+    if (Notification.permission === 'default') {
+      Notification.requestPermission().catch(() => {});
+    }
+  };
 
   useEffect(() => {
     fetchSavedVariations();
@@ -141,9 +194,21 @@ export default function Home() {
 
   const generatePDF = async () => {
     if (!data.length) return;
+    requestNotificationPermissionOnce();
+    setGenerationLabel('PDF');
     setIsGenerating(true);
+    isGeneratingRef.current = true;
     setPdfProgress(0);
+    await acquireWakeLock();
     let currentLabel = 0;
+
+    // Auto-scale capture quality with label count to stay under V8's 512 MB string cap.
+    //   ≤150: high quality (pixelRatio 2, q 0.92)
+    //   151-300: mid quality (pixelRatio 1.75, q 0.88)
+    //   301+: compact (pixelRatio 1.5, q 0.85)
+    const count = data.length;
+    const pixelRatio = count > 300 ? 1.5 : count > 150 ? 1.75 : 2;
+    const jpegQuality = count > 300 ? 0.85 : count > 150 ? 0.88 : 0.92;
 
     try {
       const jsPDF = (await import('jspdf')).default;
@@ -166,10 +231,10 @@ export default function Home() {
       await document.fonts.ready;
       const fontEmbedCSS = await buildFontEmbedCSS();
 
-      for (let i = 0; i < data.length; i++) {
+      for (let i = 0; i < count; i++) {
         currentLabel = i + 1;
         setPreviewIdx(i);
-        setPdfProgress(Math.round(((i + 1) / data.length) * 100));
+        setPdfProgress(Math.round(((i + 1) / count) * 100));
 
         // Two RAFs guarantee React has committed and the browser has painted.
         await waitForPaint();
@@ -198,45 +263,60 @@ export default function Home() {
         };
         sanitize(target);
 
-        let canvas: HTMLCanvasElement;
+        let imgData: string;
         try {
-          // pixelRatio 2 → ~450 DPI at this canvas size, well above print quality.
-          // pixelRatio 3 + PNG overflowed V8's 512 MB string cap on 100-label runs.
-          canvas = await toCanvas(target, {
-            pixelRatio: 2,
+          const canvas = await toCanvas(target, {
+            pixelRatio,
             backgroundColor: '#ffffff',
             fontEmbedCSS,
           });
+          imgData = canvas.toDataURL('image/jpeg', jpegQuality);
+          // canvas goes out of scope at end of try-block → GC-eligible
         } catch (e) {
           throw new Error(`Label #${currentLabel} render failed: ${e instanceof Error ? e.message : String(e)}`);
         }
 
-        // JPEG at q=0.95 is ~5-8x smaller than PNG for label content and keeps text crisp.
-        const imgData = canvas.toDataURL('image/jpeg', 0.95);
         doc.addImage(imgData, 'JPEG', 0, 0, width, height, undefined, 'FAST');
 
-        if (i < data.length - 1) {
+        if (i < count - 1) {
           doc.addPage([width, height]);
+        }
+
+        // Every 25 labels yield to the event loop so V8 can run GC and free
+        // the previous canvases / data URLs before the next batch piles on.
+        if ((i + 1) % 25 === 0 && i + 1 < count) {
+          await new Promise(r => setTimeout(r, 0));
         }
       }
 
       doc.save('labels.pdf');
+      notifyDone('PDF', count);
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
       console.error('PDF Generation failed:', error);
-      alert(`Failed to generate PDF at label #${currentLabel} of ${data.length}.\n\n${msg}\n\nOpen the browser console (F12) for the full stack trace and share it.`);
+      const hint = msg.includes('Invalid string length') || msg.toLowerCase().includes('memory')
+        ? '\n\nTip: For very large batches use "Download ZIP" — it writes each label as a separate PNG and avoids browser memory limits.'
+        : '';
+      alert(`Failed to generate PDF at label #${currentLabel} of ${count}.\n\n${msg}${hint}\n\nOpen the browser console (F12) for the full stack trace and share it.`);
     } finally {
+      isGeneratingRef.current = false;
       setIsGenerating(false);
       setPdfProgress(0);
       setPreviewIdx(0);
+      await releaseWakeLock();
     }
   };
 
   const generateZIP = async () => {
     if (!data.length) return;
+    requestNotificationPermissionOnce();
+    setGenerationLabel('ZIP');
     setIsGenerating(true);
+    isGeneratingRef.current = true;
     setPdfProgress(0);
+    await acquireWakeLock();
     let currentLabel = 0;
+    const count = data.length;
 
     try {
       const JSZip = (await import('jszip')).default;
@@ -252,10 +332,10 @@ export default function Home() {
       await document.fonts.ready;
       const fontEmbedCSS = await buildFontEmbedCSS();
 
-      for (let i = 0; i < data.length; i++) {
+      for (let i = 0; i < count; i++) {
         currentLabel = i + 1;
         setPreviewIdx(i);
-        setPdfProgress(Math.round(((i + 1) / data.length) * 100));
+        setPdfProgress(Math.round(((i + 1) / count) * 100));
 
         await waitForPaint();
         await waitForPaint();
@@ -283,27 +363,36 @@ export default function Home() {
         };
         sanitize(target);
 
-        // Calculate pixelRatio for 500 DPI output
+        // Calculate pixelRatio for 500 DPI output; downscale slightly for huge batches
+        // so the per-canvas memory doesn't pile up faster than GC can reclaim it.
         const scale = Math.min(550 / width, 750 / height);
-        const dpiRatio = Math.max(3, Math.ceil(500 / (25.4 * scale)));
+        const baseDpi = count > 300 ? 350 : count > 150 ? 425 : 500;
+        const dpiRatio = Math.max(2, Math.ceil(baseDpi / (25.4 * scale)));
 
-        let canvas: HTMLCanvasElement;
+        let pngBuf: ArrayBuffer;
         try {
-          canvas = await toCanvas(target, {
+          const canvas = await toCanvas(target, {
             pixelRatio: dpiRatio,
             backgroundColor: '#ffffff',
             fontEmbedCSS,
+          });
+          pngBuf = await new Promise<ArrayBuffer>((resolve, reject) => {
+            canvas.toBlob(b => {
+              if (!b) return reject(new Error('canvas.toBlob returned null'));
+              b.arrayBuffer().then(resolve, reject);
+            }, 'image/png');
           });
         } catch (e) {
           throw new Error(`Label #${currentLabel} render failed: ${e instanceof Error ? e.message : String(e)}`);
         }
 
-        // Inject 500 DPI (pHYs chunk) into PNG
-        const pngBuf = await new Promise<ArrayBuffer>(resolve => {
-          canvas.toBlob(b => b!.arrayBuffer().then(resolve), 'image/png');
-        });
-        const dpiBlob = setPngDpi(pngBuf, 500);
+        const dpiBlob = setPngDpi(pngBuf, baseDpi);
         zip.file(`label-${String(i + 1).padStart(3, '0')}.png`, dpiBlob);
+
+        // Yield every 25 labels so GC can free canvas + PNG buffers from earlier iterations.
+        if ((i + 1) % 25 === 0 && i + 1 < count) {
+          await new Promise(r => setTimeout(r, 0));
+        }
       }
 
       const zipBlob = await zip.generateAsync({ type: 'blob' });
@@ -313,21 +402,54 @@ export default function Home() {
       a.download = 'labels.zip';
       a.click();
       URL.revokeObjectURL(url);
+      notifyDone('ZIP', count);
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
       console.error('ZIP Generation failed:', error);
-      alert(`Failed to generate ZIP at label #${currentLabel} of ${data.length}.\n\n${msg}\n\nOpen the browser console (F12) for the full stack trace and share it.`);
+      alert(`Failed to generate ZIP at label #${currentLabel} of ${count}.\n\n${msg}\n\nOpen the browser console (F12) for the full stack trace and share it.`);
     } finally {
+      isGeneratingRef.current = false;
       setIsGenerating(false);
       setPdfProgress(0);
       setPreviewIdx(0);
+      await releaseWakeLock();
     }
   };
 
   return (
     <div className="min-h-screen bg-[var(--background)]">
+      {/* Generation Lock Banner — fixed at top, blocks user from forgetting and closing the tab */}
+      {isGenerating && (
+        <div className="fixed top-0 left-0 right-0 z-[200] bg-amber-50 border-b-2 border-amber-400 shadow-lg">
+          <div className="max-w-[1800px] mx-auto px-6 py-3 flex items-center gap-4">
+            <div className="shrink-0 w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center text-amber-700">
+              <Loader2 size={20} className="animate-spin" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2 mb-1">
+                <p className="text-sm font-bold text-amber-900">
+                  Generating {generationLabel} — {pdfProgress}% &middot; label {Math.max(1, Math.round((pdfProgress / 100) * data.length))} of {data.length}
+                </p>
+                <span className="hidden sm:inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-widest text-amber-700 bg-amber-100 px-2 py-0.5 rounded-md border border-amber-300">
+                  <AlertTriangle size={10} />
+                  Keep this tab open
+                </span>
+              </div>
+              <div className="h-2 bg-amber-200 rounded-full overflow-hidden">
+                <div className="h-full bg-gradient-to-r from-amber-400 to-amber-600 transition-all duration-300" style={{ width: `${pdfProgress}%` }} />
+              </div>
+              <p className="text-[11px] text-amber-700 mt-1">
+                You can switch to other tabs — the export will keep running. Closing or refreshing this tab will cancel it.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Push everything down while the banner is visible so it doesn't cover the header */}
+      {isGenerating && <div aria-hidden style={{ height: 82 }} />}
+
       {/* Header */}
-      <header className="sticky top-0 z-50 bg-white shadow-sm">
+      <header className={`sticky z-50 bg-white shadow-sm ${isGenerating ? 'top-[82px]' : 'top-0'}`}>
         {/* Orange-blue accent line */}
         <div className="h-1 bg-gradient-to-r from-dk-orange via-dk-blue to-dk-orange" />
         <div className="max-w-[1800px] mx-auto px-6 h-16 flex items-center justify-between">
