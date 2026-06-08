@@ -1,8 +1,9 @@
 'use client';
 
 import { useStore, type FieldRole, type FontSize, type FontWeight, type Alignment, FONT_FAMILIES } from '@/lib/store';
-import { Type, AlignLeft, AlignCenter, AlignRight, CaseSensitive, Square, Columns, SplitSquareVertical, Minus, CornerDownLeft, Undo2, Layers, Check } from 'lucide-react';
-import { useState, useRef } from 'react';
+import { markupToHtml } from '@/lib/richtext';
+import { Type, AlignLeft, AlignCenter, AlignRight, CaseSensitive, Square, Columns, SplitSquareVertical, Minus, CornerDownLeft, Undo2 } from 'lucide-react';
+import RichTextField from './RichTextField';
 
 /**
  * The full set of formatting controls for a single field, keyed by column name.
@@ -13,7 +14,7 @@ import { useState, useRef } from 'react';
 export default function FieldControls({ column }: { column: string }) {
   const store = useStore();
   const {
-    updateField, setDataOverride, clearDataOverride, applyDataOverrideToAll,
+    updateField, setDataOverride, clearDataOverride,
     clearDataOverrideForColumn, data, dataOverrides, editingLabelIdx, previewIdx,
   } = store;
 
@@ -22,9 +23,6 @@ export default function FieldControls({ column }: { column: string }) {
   const config = editingLabelIdx !== null ? effective.config : store.config;
   const f = config.find(c => c.column === column);
 
-  const [appliedFlash, setAppliedFlash] = useState<{ count: number } | null>(null);
-  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
-
   const rawValue = String(data[idx]?.[column] ?? '');
   const displayValue = dataOverrides[idx]?.[column] ?? rawValue;
   const hasOverride = dataOverrides[idx]?.[column] !== undefined;
@@ -32,31 +30,25 @@ export default function FieldControls({ column }: { column: string }) {
 
   if (!f) return null;
 
-  const wrapSelectionBold = () => {
-    const ta = textareaRef.current;
-    if (!ta) return;
-    const start = ta.selectionStart;
-    const end = ta.selectionEnd;
-    const text = displayValue;
-    const selected = text.slice(start, end);
-    const replacement = selected || 'bold text';
-    const newText = text.slice(0, start) + `**${replacement}**` + text.slice(end);
-    setDataOverride(idx, column, newText);
-    requestAnimationFrame(() => {
-      ta.focus();
-      const inner = start + 2;
-      ta.setSelectionRange(inner, inner + replacement.length);
-    });
-  };
-
-  const handleApplyToAll = () => {
-    const count = applyDataOverrideToAll(column, displayValue);
-    setAppliedFlash({ count });
-    setTimeout(() => setAppliedFlash(null), 2500);
-  };
-
   return (
     <div className="space-y-4">
+      {/* Header / bold label text (falls back to the column name) */}
+      <div className="space-y-1.5">
+        <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Header (bold label)</label>
+        <input
+          type="text"
+          value={f.customLabel ?? ''}
+          onChange={(e) => updateField(column, { customLabel: e.target.value })}
+          placeholder={column}
+          className="w-full bg-gray-50 border border-gray-200 rounded-lg py-2 px-2.5 text-xs text-gray-800 focus:outline-none focus:ring-2 focus:ring-dk-blue/30 focus:border-dk-blue transition-all"
+        />
+        <p className="text-[10px] text-gray-400">
+          {f.showLabel
+            ? 'Bold text shown before the value. Leave empty to use the column name.'
+            : 'Turn on the “Label” toggle below to show this header on the label.'}
+        </p>
+      </div>
+
       {/* Text content + line breaks + inline bold (per-label or all labels) */}
       <div className="space-y-1.5">
         <div className="flex items-center flex-wrap gap-2">
@@ -64,38 +56,20 @@ export default function FieldControls({ column }: { column: string }) {
             Text (Label #{idx + 1})
           </label>
           {overrideCount > 0 && (
-            <span className="text-[9px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded-md">
+            <span className="ml-auto text-[9px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded-md">
               {overrideCount}/{data.length} overridden
             </span>
           )}
-          <button
-            onClick={wrapSelectionBold}
-            title="Wrap selected text in **bold**"
-            className="ml-auto flex items-center gap-1 px-2 py-0.5 rounded-md bg-gray-100 border border-gray-200 text-gray-700 text-[10px] font-black hover:bg-dk-blue-light hover:border-dk-blue/30 hover:text-dk-blue transition-colors"
-          >
-            B
-          </button>
         </div>
-        <textarea
-          ref={textareaRef}
-          value={displayValue}
-          onChange={(e) => setDataOverride(idx, column, e.target.value)}
-          rows={Math.min(6, Math.max(2, displayValue.split('\n').length + 1))}
+        <RichTextField
+          html={markupToHtml(displayValue)}
+          onChange={(h) => setDataOverride(idx, column, h)}
           placeholder="(empty)"
-          className="w-full bg-gray-50 border border-gray-200 rounded-lg py-2 px-2.5 text-xs text-gray-800 font-mono leading-relaxed focus:outline-none focus:ring-2 focus:ring-dk-blue/30 focus:border-dk-blue transition-all resize-y"
+          className="w-full min-h-[2.5rem] bg-gray-50 border border-gray-200 rounded-lg py-2 px-2.5 text-xs text-gray-800 leading-relaxed focus-within:ring-2 focus-within:ring-dk-blue/30 focus-within:border-dk-blue transition-all"
         />
 
-        {/* Scope controls: apply to one label vs. all */}
+        {/* Reset controls (applying to other labels lives in the bottom Apply bar) */}
         <div className="flex flex-wrap gap-2">
-          <button
-            onClick={handleApplyToAll}
-            disabled={data.length === 0}
-            className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-violet-50 border border-violet-200 text-violet-700 text-[10px] font-bold hover:bg-violet-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            title="Copy this exact text (with line breaks and bold) to every label"
-          >
-            <Layers size={11} />
-            Apply to All {data.length} Labels
-          </button>
           {hasOverride && (
             <button
               onClick={() => clearDataOverride(idx, column)}
@@ -116,17 +90,11 @@ export default function FieldControls({ column }: { column: string }) {
               Reset All
             </button>
           )}
-          {appliedFlash && (
-            <span className="flex items-center gap-1 px-2 py-1 rounded-md bg-green-50 border border-green-200 text-green-700 text-[10px] font-bold">
-              <Check size={11} />
-              Applied to {appliedFlash.count} label{appliedFlash.count !== 1 ? 's' : ''}
-            </span>
-          )}
         </div>
 
         <p className="flex items-center gap-1 text-[10px] text-gray-400">
           <CornerDownLeft size={10} />
-          <span><span className="font-bold text-gray-600">Enter</span> = new line. Wrap in <span className="font-bold text-gray-600">**double asterisks**</span> for bold (or select text and click <span className="font-bold text-gray-600">B</span>). Use <span className="font-bold text-gray-600">Apply to All</span> if every label should read the same.</span>
+          <span><span className="font-bold text-gray-600">Enter</span> = new line. <span className="font-bold text-gray-600">Select any text</span> to format it (bold, italic, underline, size, colour). Use <span className="font-bold text-gray-600">Apply to All</span> if every label should read the same.</span>
         </p>
       </div>
 

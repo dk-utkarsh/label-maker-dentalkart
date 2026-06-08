@@ -4,6 +4,7 @@ import { useEffect, useRef, useMemo } from 'react';
 import JsBarcode from 'jsbarcode';
 import QRCode from 'qrcode';
 import { useStore, type FieldConfig } from '@/lib/store';
+import { isRichHtml, sanitizeHtml } from '@/lib/richtext';
 
 /** Parse **bold** markdown spans. Newlines are preserved by white-space: pre-wrap on the container. */
 function parseInline(text: unknown): React.ReactNode {
@@ -147,6 +148,7 @@ export default function LabelPreview({ overrideIdx }: { overrideIdx?: number } =
     const val = valueOf(f.column);
     if (!val && !f.border) return null;
     const fontSize = getFs(f, role);
+    const rich = isRichHtml(val);
     const formatted = (f.prefix || '') + (f.uppercase ? val.toUpperCase() : val) + (f.suffix || '');
 
     return (
@@ -161,6 +163,7 @@ export default function LabelPreview({ overrideIdx }: { overrideIdx?: number } =
           lineHeight: 1.3,
           wordBreak: 'break-word',
           whiteSpace: 'pre-wrap',
+          textTransform: rich && f.uppercase ? 'uppercase' : undefined,
           width: isSameRow ? undefined : '100%',
           flex: isSameRow ? 1 : undefined,
           border: f.border ? '1px solid #ccc' : 'none',
@@ -168,8 +171,10 @@ export default function LabelPreview({ overrideIdx }: { overrideIdx?: number } =
         }}
         className="text-[#111]"
       >
-        {f.showLabel && <span className="font-bold text-[#000]">{f.column}: </span>}
-        {parseInline(formatted)}
+        {f.showLabel && <span className="font-bold text-[#000]">{f.customLabel || f.column}: </span>}
+        {rich
+          ? <>{f.prefix}<span dangerouslySetInnerHTML={{ __html: sanitizeHtml(val) }} />{f.suffix}</>
+          : parseInline(formatted)}
       </div>
     );
   };
@@ -241,6 +246,7 @@ export default function LabelPreview({ overrideIdx }: { overrideIdx?: number } =
                 {grpRow.map((f, fi: number) => {
                   const fontSize = getFs(f, 'body');
                   const val = valueOf(f.column);
+                  const rich = isRichHtml(val);
                   const formatted = (f.prefix || '') + (f.uppercase ? val.toUpperCase() : val) + (f.suffix || '');
                   return (
                     <div
@@ -257,11 +263,14 @@ export default function LabelPreview({ overrideIdx }: { overrideIdx?: number } =
                         lineHeight: 1.35,
                         wordBreak: 'break-word',
                         whiteSpace: 'pre-wrap',
+                        textTransform: rich && f.uppercase ? 'uppercase' : undefined,
                         color: '#111',
                       }}
                     >
-                      {f.showLabel && <span style={{ fontWeight: 700 }}>{f.column}: </span>}
-                      {parseInline(formatted)}
+                      {f.showLabel && <span style={{ fontWeight: 700 }}>{f.customLabel || f.column}: </span>}
+                      {rich
+                        ? <>{f.prefix}<span dangerouslySetInnerHTML={{ __html: sanitizeHtml(val) }} />{f.suffix}</>
+                        : parseInline(formatted)}
                     </div>
                   );
                 })}

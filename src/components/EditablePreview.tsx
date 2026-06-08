@@ -3,10 +3,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useStore } from '@/lib/store';
+import { markupToHtml } from '@/lib/richtext';
 import LabelPreview from './LabelPreview';
 import FieldControls from './FieldControls';
 import CodeControls from './CodeControls';
 import LogoControls from './LogoControls';
+import RichTextField from './RichTextField';
 import { X, Globe, Pencil, GripVertical, Image as ImageIcon, Barcode, Megaphone } from 'lucide-react';
 
 interface Rect { top: number; left: number; width: number; height: number; }
@@ -44,7 +46,7 @@ export default function EditablePreview() {
 
   const wrapRef = useRef<HTMLDivElement>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const editorRef = useRef<HTMLDivElement>(null);
 
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [editingTextKey, setEditingTextKey] = useState<string | null>(null);
@@ -122,15 +124,6 @@ export default function EditablePreview() {
     };
   }, [selectedKey, measure]);
 
-  // Focus the inline text editor when it opens.
-  useEffect(() => {
-    if (editingTextKey && textareaRef.current) {
-      const ta = textareaRef.current;
-      ta.focus();
-      ta.setSelectionRange(ta.value.length, ta.value.length);
-    }
-  }, [editingTextKey]);
-
   // Close on outside click / Escape.
   useEffect(() => {
     if (!selectedKey) return;
@@ -138,7 +131,8 @@ export default function EditablePreview() {
       const t = e.target as Node;
       if (draggingRef.current) return;
       if (popoverRef.current?.contains(t)) return;
-      if (textareaRef.current?.contains(t)) return;
+      if (editorRef.current?.contains(t)) return;
+      if ((t as HTMLElement)?.closest?.('[data-rte-toolbar]')) return;
       if ((t as HTMLElement)?.closest?.('[data-drag-handle]')) return;
       if ((t as HTMLElement)?.closest?.('[data-field-column]')) return;
       if ((t as HTMLElement)?.closest?.('[data-element]')) return;
@@ -193,16 +187,15 @@ export default function EditablePreview() {
 
   // ----- Inline text editor binding (fields + banner) -----
   const bannerTextEffective = editingLabelIdx !== null ? store.getEffectiveConfig(idx).bannerText : store.bannerText;
-  const editingValue = (() => {
-    if (!editingTextKey) return '';
-    const p = parseKey(editingTextKey);
-    return p.kind === 'field' ? store.getValue(idx, p.column) : bannerTextEffective;
-  })();
+  const editingParsed = editingTextKey ? parseKey(editingTextKey) : null;
+  const editingFieldColumn = editingParsed?.kind === 'field' ? editingParsed.column : null;
+  const editingField = editingFieldColumn
+    ? (editingLabelIdx !== null ? store.getEffectiveConfig(idx).config : store.config).find(f => f.column === editingFieldColumn) ?? null
+    : null;
+  const editingValue = editingFieldColumn ? store.getValue(idx, editingFieldColumn) : bannerTextEffective;
   const commitEditingValue = (val: string) => {
-    if (!editingTextKey) return;
-    const p = parseKey(editingTextKey);
-    if (p.kind === 'field') store.setDataOverride(idx, p.column, val);
-    else store.setBannerText(val);
+    if (editingFieldColumn) store.setDataOverride(idx, editingFieldColumn, val);
+    else if (editingParsed?.kind === 'el' && editingParsed.el === 'banner') store.setBannerText(val);
   };
 
   // ----- Drag-to-reorder (fields) + drag logo top/bottom -----
@@ -404,27 +397,50 @@ export default function EditablePreview() {
         )
       )}
 
-      {/* Inline text editor (double-click a field or the banner) */}
+      {/* Inline text editor (double-click a field or the banner).
+          For a field that shows a label, edit the header AND the content together. */}
       {editingTextKey && selRect && (
-        <textarea
-          ref={textareaRef}
-          value={editingValue}
-          onChange={(e) => commitEditingValue(e.target.value)}
-          onBlur={() => setEditingTextKey(null)}
+        <div
+          ref={editorRef}
+          className="absolute z-30 flex flex-col gap-0.5"
+          style={{ top: selRect.top - 2, left: selRect.left - 2, width: Math.max(selRect.width + 4, 120) }}
           onClick={(e) => e.stopPropagation()}
           onDoubleClick={(e) => e.stopPropagation()}
-          spellCheck={false}
-          className="absolute z-30 resize-none rounded-[2px] bg-white text-[#111] outline outline-2 outline-dk-blue shadow-lg leading-tight"
-          style={{
-            top: selRect.top - 2,
-            left: selRect.left - 2,
-            width: Math.max(selRect.width + 4, 80),
-            minHeight: selRect.height + 4,
-            padding: '1px 2px',
-            fontSize: 12,
-            fontFamily: 'monospace',
-          }}
-        />
+          onBlur={(e) => { if (!editorRef.current?.contains(e.relatedTarget as Node)) setEditingTextKey(null); }}
+        >
+          {editingField?.showLabel && editingFieldColumn && (
+            <input
+              type="text"
+              value={editingField.customLabel ?? ''}
+              placeholder={editingFieldColumn}
+              onChange={(e) => store.updateField(editingFieldColumn, { customLabel: e.target.value })}
+              spellCheck={false}
+              title="Header / bold label"
+              className="rounded-[2px] bg-amber-50 text-[#111] outline outline-2 outline-dk-orange shadow-lg leading-tight font-bold"
+              style={{ padding: '1px 3px', fontSize: 12, fontFamily: 'monospace' }}
+            />
+          )}
+          {editingFieldColumn ? (
+            <RichTextField
+              html={markupToHtml(editingValue)}
+              onChange={commitEditingValue}
+              autoFocus
+              placeholder="(empty)"
+              className="w-full rounded-[2px] bg-white text-[#111] outline outline-2 outline-dk-blue shadow-lg leading-tight px-0.5"
+              style={{ minHeight: selRect.height + 4, fontSize: 12 }}
+            />
+          ) : (
+            <textarea
+              value={editingValue}
+              onChange={(e) => commitEditingValue(e.target.value)}
+              autoFocus
+              spellCheck={false}
+              title="Banner text"
+              className="resize-none rounded-[2px] bg-white text-[#111] outline outline-2 outline-dk-blue shadow-lg leading-tight"
+              style={{ width: '100%', minHeight: selRect.height + 4, padding: '1px 2px', fontSize: 12, fontFamily: 'monospace' }}
+            />
+          )}
+        </div>
       )}
 
       {/* Popover (portaled to body so the scroll container can't clip it) */}

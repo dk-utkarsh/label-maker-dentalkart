@@ -8,6 +8,7 @@ import EditablePreview from '@/components/EditablePreview';
 import LayoutSelector from '@/components/LayoutSelector';
 import { Download, ChevronLeft, ChevronRight, Save, Trash2, RotateCcw, Eye, Layers, X, CheckCircle, Loader2, FileSpreadsheet, Palette, Printer, Pencil, Globe, Undo2, Copy, Check, ImageDown, AlertTriangle } from 'lucide-react';
 import { HeroSection } from '@/components/ui/hero-section';
+import ApplyBar from '@/components/ApplyBar';
 
 export default function Home() {
   const { data, previewIdx, setPreviewIdx, width, height, config, savedVariations, saveVariation, loadVariation, deleteVariation, fetchSavedVariations, editingLabelIdx, setEditingLabelIdx, labelOverrides, clearLabelOverride, setLabelOverride, getEffectiveConfig } = useStore();
@@ -1023,6 +1024,9 @@ export default function Home() {
           </div>
         </div>
       )}
+
+      {/* Apply-to-other-labels bar (appears after you customise a label) */}
+      <ApplyBar />
     </div>
   );
 }

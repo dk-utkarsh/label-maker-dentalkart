@@ -82,6 +82,13 @@ input[type="number"]::-webkit-outer-spin-button {
   outline-offset: 1px;
 }
 
+/* Rich-text editor placeholder */
+.dk-rte:empty:before {
+  content: attr(data-placeholder);
+  color: #9ca3af;
+  pointer-events: none;
+}
+
 /* Modal backdrop */
 .modal-backdrop {
   animation: fadeIn 0.15s ease-out;

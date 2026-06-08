@@ -37,6 +37,8 @@ export interface FieldConfig {
   fontFamily: string;
   uppercase: boolean;
   showLabel: boolean;
+  /** Custom text for the bold label/header shown before the value (falls back to `column`). */
+  customLabel?: string;
   prefix: string;
   suffix: string;
   sameRow: boolean;
@@ -179,6 +181,7 @@ interface LabelState {
   setDataOverride: (idx: number, column: string, value: string) => void;
   clearDataOverride: (idx: number, column?: string) => void;
   applyDataOverrideToAll: (column: string, value: string) => number;
+  applyLabelToTargets: (srcIdx: number, targetIdxs: number[], opts: { styling: boolean; text: boolean }) => void;
   clearDataOverrideForColumn: (column: string) => void;
   getValue: (idx: number, column: string) => string;
   getLayoutSnapshot: () => LayoutSnapshot;
@@ -501,6 +504,37 @@ export const useStore = create<LabelState>((set, get) => ({
     }
     set({ dataOverrides: updated });
     return count;
+  },
+
+  applyLabelToTargets: (srcIdx, targetIdxs, opts) => {
+    const s = get();
+    const srcEff = s.getEffectiveConfig(srcIdx);
+    const newOverrides = { ...s.labelOverrides };
+    const newData = { ...s.dataOverrides };
+    targetIdxs.forEach((t) => {
+      if (t === srcIdx) return;
+      if (opts.styling) {
+        newOverrides[t] = {
+          config: structuredClone(srcEff.config),
+          barcodeField: srcEff.barcodeField,
+          barcodeOrder: srcEff.barcodeOrder,
+          barcodeSize: srcEff.barcodeSize,
+          qrSize: srcEff.qrSize,
+          codeType: srcEff.codeType,
+          codeAlign: srcEff.codeAlign,
+          bannerText: srcEff.bannerText,
+          logo: srcEff.logo,
+          logoPosition: srcEff.logoPosition,
+          logoSize: srcEff.logoSize,
+        };
+      }
+      if (opts.text) {
+        const forT = { ...(newData[t] || {}) };
+        s.columns.forEach((col) => { forT[col] = s.getValue(srcIdx, col); });
+        newData[t] = forT;
+      }
+    });
+    set({ labelOverrides: newOverrides, dataOverrides: newData });
   },
 
   clearDataOverrideForColumn: (column) => set((state) => {
