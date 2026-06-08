@@ -3,7 +3,7 @@
 import { useEffect, useRef, useMemo } from 'react';
 import JsBarcode from 'jsbarcode';
 import QRCode from 'qrcode';
-import { useStore } from '@/lib/store';
+import { useStore, type FieldConfig } from '@/lib/store';
 
 /** Parse **bold** markdown spans. Newlines are preserved by white-space: pre-wrap on the container. */
 function parseInline(text: unknown): React.ReactNode {
@@ -20,7 +20,7 @@ function parseInline(text: unknown): React.ReactNode {
 
 export default function LabelPreview({ overrideIdx }: { overrideIdx?: number } = {}) {
   const store = useStore();
-  const { width, height, data, previewIdx, topRule, outerBorder, pinFooter } = store;
+  const { width, height, data, previewIdx, topRule, outerBorder, pinFooter, logoPlacement } = store;
   const idx = overrideIdx ?? previewIdx;
   const effective = store.getEffectiveConfig(idx);
   const { config, logo, logoPosition, logoSize, bannerText, barcodeField, barcodeOrder, barcodeSize, qrSize, codeType, codeAlign } = effective;
@@ -56,7 +56,7 @@ export default function LabelPreview({ overrideIdx }: { overrideIdx?: number } =
   };
   const fontScales: Record<string, number> = { xs: 0.7, sm: 0.85, md: 1, lg: 1.25, xl: 1.6, auto: 1 };
 
-  const getFs = (f: any, role: string) => {
+  const getFs = (f: FieldConfig, role: string) => {
     const base = fontBase[role] || fontBase.body;
     return base * (fontScales[f.fontSize] || 1);
   };
@@ -109,8 +109,6 @@ export default function LabelPreview({ overrideIdx }: { overrideIdx?: number } =
     }
   }, [row, barcodeField, hasCode, hPx, wPx, qrSize, activeCodeType]);
 
-  if (!data.length) return null;
-
   // Collect fields that should render inline with the barcode/QR (sameRow right after barcode)
   const codeRowFields = useMemo(() => {
     if (!hasCode) return [];
@@ -127,12 +125,14 @@ export default function LabelPreview({ overrideIdx }: { overrideIdx?: number } =
 
   const codeRowColumns = useMemo(() => new Set(codeRowFields.map(f => f.column)), [codeRowFields]);
 
+  if (!data.length) return null;
+
   const titles = activeFields.filter(f => f.role === 'title' && !codeRowColumns.has(f.column));
   const bodies = activeFields.filter(f => f.role === 'body' && !codeRowColumns.has(f.column));
   const footers = activeFields.filter(f => f.role === 'footer' && !codeRowColumns.has(f.column));
 
-  const groupRows = (fields: any[]) => {
-    const rows: any[][] = [];
+  const groupRows = (fields: FieldConfig[]) => {
+    const rows: FieldConfig[][] = [];
     fields.forEach(f => {
       if (f.sameRow && rows.length > 0) {
         rows[rows.length - 1].push(f);
@@ -143,18 +143,7 @@ export default function LabelPreview({ overrideIdx }: { overrideIdx?: number } =
     return rows;
   };
 
-  const renderFieldContent = (f: any, role: string) => {
-    const val = valueOf(f.column);
-    const formatted = (f.prefix || '') + (f.uppercase ? val.toUpperCase() : val) + (f.suffix || '');
-    return (
-      <>
-        {f.showLabel && <span style={{ fontWeight: 700, color: '#000' }}>{f.column}: </span>}
-        {parseInline(formatted)}
-      </>
-    );
-  };
-
-  const renderField = (f: any, role: string, isSameRow = false) => {
+  const renderField = (f: FieldConfig, role: string, isSameRow = false) => {
     const val = valueOf(f.column);
     if (!val && !f.border) return null;
     const fontSize = getFs(f, role);
@@ -163,6 +152,7 @@ export default function LabelPreview({ overrideIdx }: { overrideIdx?: number } =
     return (
       <div
         key={f.column}
+        data-field-column={f.column}
         style={{
           fontSize: `${fontSize}px`,
           fontWeight: f.fontWeight || (role === 'title' ? '600' : '400'),
@@ -184,7 +174,7 @@ export default function LabelPreview({ overrideIdx }: { overrideIdx?: number } =
     );
   };
 
-  const renderSection = (fields: any[], role: string) => {
+  const renderSection = (fields: FieldConfig[], role: string) => {
     const grouped = groupRows(fields);
     return grouped.map((gr, i) => (
       <div
@@ -205,7 +195,7 @@ export default function LabelPreview({ overrideIdx }: { overrideIdx?: number } =
     const grouped = groupRows(bodies);
 
     // Split into segments: bordered-grid vs normal
-    type Segment = { type: 'bordered'; rows: any[][] } | { type: 'normal'; rows: any[][] };
+    type Segment = { type: 'bordered'; rows: FieldConfig[][] } | { type: 'normal'; rows: FieldConfig[][] };
     const segments: Segment[] = [];
 
     grouped.forEach(grpRow => {
@@ -224,7 +214,7 @@ export default function LabelPreview({ overrideIdx }: { overrideIdx?: number } =
     return segments.map((seg, si) => {
       if (seg.type === 'bordered') {
         // Check if any field in the segment has openBorder
-        const isOpen = seg.rows.some(r => r.some((f: any) => f.openBorder));
+        const isOpen = seg.rows.some(r => r.some((f) => f.openBorder));
         // Render as table-like bordered grid
         return (
           <div
@@ -248,13 +238,14 @@ export default function LabelPreview({ overrideIdx }: { overrideIdx?: number } =
                   borderBottom: (ri < seg.rows.length - 1 && !nextRowMerges) ? '1px solid #333' : 'none',
                 }}
               >
-                {grpRow.map((f: any, fi: number) => {
+                {grpRow.map((f, fi: number) => {
                   const fontSize = getFs(f, 'body');
                   const val = valueOf(f.column);
                   const formatted = (f.prefix || '') + (f.uppercase ? val.toUpperCase() : val) + (f.suffix || '');
                   return (
                     <div
                       key={f.column}
+                      data-field-column={f.column}
                       style={{
                         flex: 1,
                         padding: `${Math.max(3, borderPad)}px`,
@@ -300,6 +291,7 @@ export default function LabelPreview({ overrideIdx }: { overrideIdx?: number } =
   const alignMap = { left: 'flex-start', center: 'center', right: 'flex-end' };
   const codeElement = hasCode ? (
     <div
+      data-element="code"
       style={{
         margin: `${sectionGap * 0.5}px 0`,
         display: 'flex',
@@ -324,6 +316,46 @@ export default function LabelPreview({ overrideIdx }: { overrideIdx?: number } =
   const hasFooters = footers.length > 0;
   const hasBanner = !!bannerText;
 
+  // Logo block, renderable at the top or bottom of the label (clickable to edit).
+  const renderLogo = (atBottom: boolean) => {
+    if (!logo && topRule) return null; // placeholder is hidden when a top rule is shown
+    const justify = logoPosition === 'center' ? 'center' : logoPosition === 'right' ? 'flex-end' : 'flex-start';
+    return (
+      <div
+        data-element="logo"
+        style={{
+          marginTop: atBottom ? `${sectionGap}px` : 0,
+          marginBottom: atBottom ? 0 : `${sectionGap}px`,
+          justifyContent: justify,
+        }}
+        className="flex items-center"
+      >
+        {logo ? (
+          <img
+            src={logo}
+            style={{ maxWidth: `${30 * ((logoSize ?? 100) / 100)}%`, maxHeight: hPx * 0.13 * ((logoSize ?? 100) / 100) }}
+            className="object-contain"
+            alt="Logo"
+          />
+        ) : (
+          <div
+            style={{
+              width: Math.max(20, wPx * 0.18),
+              height: Math.max(12, hPx * 0.065),
+              fontSize: `${Math.max(5, unit * 0.017)}px`,
+              borderColor: '#e2e8f0',
+              backgroundColor: '#f8fafc',
+              color: '#94a3b8',
+            }}
+            className="rounded border-dashed border flex items-center justify-center font-bold"
+          >
+            LOGO
+          </div>
+        )}
+      </div>
+    );
+  };
+
   return (
     <div className="flex flex-col items-center gap-4 py-8">
       <div
@@ -347,45 +379,8 @@ export default function LabelPreview({ overrideIdx }: { overrideIdx?: number } =
           />
         )}
 
-        {/* Logo */}
-        {logo ? (
-          <div
-            style={{
-              marginBottom: `${sectionGap}px`,
-              justifyContent: logoPosition === 'center' ? 'center' : logoPosition === 'right' ? 'flex-end' : 'flex-start',
-            }}
-            className="flex items-center"
-          >
-            <img
-              src={logo}
-              style={{ maxWidth: `${30 * ((logoSize ?? 100) / 100)}%`, maxHeight: hPx * 0.13 * ((logoSize ?? 100) / 100) }}
-              className="object-contain"
-              alt="Logo"
-            />
-          </div>
-        ) : !topRule ? (
-          <div
-            style={{
-              marginBottom: `${sectionGap}px`,
-              justifyContent: logoPosition === 'center' ? 'center' : logoPosition === 'right' ? 'flex-end' : 'flex-start',
-            }}
-            className="flex items-center"
-          >
-            <div
-              style={{
-                width: Math.max(20, wPx * 0.18),
-                height: Math.max(12, hPx * 0.065),
-                fontSize: `${Math.max(5, unit * 0.017)}px`,
-                borderColor: '#e2e8f0',
-                backgroundColor: '#f8fafc',
-                color: '#94a3b8',
-              }}
-              className="rounded border-dashed border flex items-center justify-center font-bold"
-            >
-              LOGO
-            </div>
-          </div>
-        ) : null}
+        {/* Logo — top placement */}
+        {logoPlacement !== 'bottom' && renderLogo(false)}
 
         {/* Barcode: before-title */}
         {barcodeSection === 'before-title' && codeElement}
@@ -424,9 +419,13 @@ export default function LabelPreview({ overrideIdx }: { overrideIdx?: number } =
         {/* Barcode: after-footer */}
         {barcodeSection === 'after-footer' && codeElement}
 
+        {/* Logo — bottom placement */}
+        {logoPlacement === 'bottom' && renderLogo(true)}
+
         {/* Banner — full-bleed bottom bar */}
         {hasBanner && (
           <div
+            data-element="banner"
             style={{
               margin: `${sectionGap}px -${pad}px -${pad}px`,
               padding: `${Math.max(3, hPx * 0.015)}px ${pad}px`,

@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useStore } from '@/lib/store';
 import UploadSection from '@/components/UploadSection';
 import ConfigSidebar from '@/components/ConfigSidebar';
-import LabelPreview from '@/components/LabelPreview';
+import EditablePreview from '@/components/EditablePreview';
 import LayoutSelector from '@/components/LayoutSelector';
 import { Download, ChevronLeft, ChevronRight, Save, Trash2, RotateCcw, Eye, Layers, X, CheckCircle, Loader2, FileSpreadsheet, Palette, Printer, Pencil, Globe, Undo2, Copy, Check, ImageDown, AlertTriangle } from 'lucide-react';
 import { HeroSection } from '@/components/ui/hero-section';
@@ -623,7 +623,7 @@ export default function Home() {
                         style={{ backgroundImage: 'radial-gradient(circle, #e5e7eb 1px, transparent 1px)', backgroundSize: '16px 16px' }}
                       >
                         <div className="label-preview-inner">
-                          <LabelPreview />
+                          <EditablePreview />
                         </div>
                       </div>
 

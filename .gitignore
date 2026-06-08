@@ -44,3 +44,7 @@ next-env.d.ts
 legacy/
 __pycache__/
 *.pyc
+
+# brainstorming mockups & local verification scratch
+.superpowers/
+verify-tmp/

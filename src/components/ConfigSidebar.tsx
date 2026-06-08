@@ -1,8 +1,10 @@
 'use client';
 
-import { useStore, type FieldRole, type FontSize, type FontWeight, type Alignment, FONT_FAMILIES } from '@/lib/store';
-import { Settings2, Type, ChevronDown, ChevronUp, AlignLeft, AlignCenter, AlignRight, CaseSensitive, Square, Columns, GripVertical, Barcode, SplitSquareVertical, Minus, CornerDownLeft, Undo2, Layers, Check } from 'lucide-react';
+import { useStore } from '@/lib/store';
+import { Settings2, Type, ChevronDown, ChevronUp, GripVertical, Barcode } from 'lucide-react';
 import { useState, useRef, useMemo } from 'react';
+import FieldControls from './FieldControls';
+import CodeControls from './CodeControls';
 
 type DisplayItem =
   | { kind: 'field'; configIndex: number }
@@ -10,53 +12,14 @@ type DisplayItem =
 
 export default function ConfigSidebar() {
   const store = useStore();
-  const { setConfig, updateField, setBarcodeField, setBarcodeOrder, setBarcodeSize, setQrSize, setCodeType, setCodeAlign, setBannerText, setOuterBorder, setPinFooter, columns, editingLabelIdx, previewIdx, dataOverrides, setDataOverride, clearDataOverride, applyDataOverrideToAll, clearDataOverrideForColumn, data } = store;
-  const [appliedFlash, setAppliedFlash] = useState<{ column: string; count: number } | null>(null);
+  const { setConfig, setBarcodeOrder, setBannerText, setOuterBorder, setPinFooter, columns, editingLabelIdx, previewIdx } = store;
   const idx = editingLabelIdx ?? previewIdx;
-  const rawValue = (col: string) => String(data[idx]?.[col] ?? '');
-  const displayValue = (col: string) => dataOverrides[idx]?.[col] ?? rawValue(col);
-  const hasOverride = (col: string) => dataOverrides[idx]?.[col] !== undefined;
 
-  const textareaRefs = useRef<Record<string, HTMLTextAreaElement | null>>({});
-
-  const wrapSelectionBold = (col: string) => {
-    const ta = textareaRefs.current[col];
-    if (!ta) return;
-    const start = ta.selectionStart;
-    const end = ta.selectionEnd;
-    const text = displayValue(col);
-    const selected = text.slice(start, end);
-    const replacement = selected || 'bold text';
-    const newText = text.slice(0, start) + `**${replacement}**` + text.slice(end);
-    setDataOverride(idx, col, newText);
-    requestAnimationFrame(() => {
-      ta.focus();
-      const inner = start + 2;
-      ta.setSelectionRange(inner, inner + replacement.length);
-    });
-  };
-
-  const handleApplyToAll = (col: string) => {
-    const value = displayValue(col);
-    const count = applyDataOverrideToAll(col, value);
-    setAppliedFlash({ column: col, count });
-    setTimeout(() => setAppliedFlash(s => (s?.column === col ? null : s)), 2500);
-  };
-
-  // How many labels currently have an override for this column
-  const overrideCountFor = (col: string) =>
-    Object.values(dataOverrides).reduce((acc, row) => acc + (row[col] !== undefined ? 1 : 0), 0);
   const effective = store.getEffectiveConfig(idx);
   const config = editingLabelIdx !== null ? effective.config : store.config;
   const barcodeField = editingLabelIdx !== null ? effective.barcodeField : store.barcodeField;
   const barcodeOrder = editingLabelIdx !== null ? effective.barcodeOrder : store.barcodeOrder;
-  const barcodeSize = editingLabelIdx !== null ? effective.barcodeSize : store.barcodeSize;
-  const qrSize = editingLabelIdx !== null ? effective.qrSize : store.qrSize;
-  const codeType = editingLabelIdx !== null ? effective.codeType : store.codeType;
-  const codeAlign = editingLabelIdx !== null ? effective.codeAlign : store.codeAlign;
   const bannerText = editingLabelIdx !== null ? effective.bannerText : store.bannerText;
-  const currentCodeSize = codeType === 'qr' ? (qrSize ?? 100) : (barcodeSize ?? 100);
-  const setCurrentCodeSize = codeType === 'qr' ? setQrSize : setBarcodeSize;
   const [expandedField, setExpandedField] = useState<string | null>(null);
 
   const dragIdx = useRef<number | null>(null);
@@ -158,100 +121,8 @@ export default function ConfigSidebar() {
             </button>
           </div>
 
-          {/* Code Type Toggle */}
-          <div className="space-y-1.5">
-            <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Code Type</label>
-            <div className="flex gap-1 p-1 bg-gray-100 rounded-lg">
-              {([
-                { value: 'none' as const, label: 'None' },
-                { value: 'barcode' as const, label: 'Barcode' },
-                { value: 'qr' as const, label: 'QR Code' },
-              ]).map(({ value, label }) => (
-                <button
-                  key={value}
-                  onClick={() => setCodeType(value)}
-                  className={`flex-1 py-1.5 rounded-md text-xs font-bold transition-all ${
-                    codeType === value
-                      ? 'bg-white text-dk-blue shadow-sm'
-                      : 'text-gray-500 hover:text-gray-700'
-                  }`}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Data Source — shown for barcode or QR */}
-          {codeType !== 'none' && (
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">
-                {codeType === 'qr' ? 'QR Code' : 'Barcode'} Source
-              </label>
-              <select
-                value={barcodeField}
-                onChange={(e) => setBarcodeField(e.target.value)}
-                className="w-full bg-gray-50 border border-gray-200 rounded-lg py-2 px-3 text-gray-800 focus:outline-none focus:ring-2 focus:ring-dk-blue/30 focus:border-dk-blue transition-all text-sm"
-              >
-                <option value="">Select Column</option>
-                {columns.map(col => <option key={col} value={col}>{col}</option>)}
-              </select>
-            </div>
-          )}
-
-          {codeType !== 'none' && barcodeField && (
-            <div className="space-y-1.5">
-              <div className="flex items-center justify-between">
-                <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">{codeType === 'qr' ? 'QR' : 'Barcode'} Size</label>
-                <span className="text-xs font-semibold text-gray-600">{currentCodeSize}%</span>
-              </div>
-              <input
-                type="range"
-                min={30}
-                max={200}
-                step={5}
-                value={currentCodeSize}
-                onChange={(e) => setCurrentCodeSize(Number(e.target.value))}
-                className="w-full accent-violet-500"
-              />
-              <div className="flex justify-between text-[10px] text-gray-400">
-                <span>Small</span>
-                <span>Default</span>
-                <span>Large</span>
-              </div>
-            </div>
-          )}
-
-          {/* Code Position */}
-          {codeType !== 'none' && barcodeField && (
-            <div className="space-y-1.5">
-              <div className="flex items-center gap-2">
-                <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">
-                  {codeType === 'qr' ? 'QR' : 'Barcode'} Position
-                </label>
-                <div className="flex gap-1 ml-auto">
-                  {([
-                    { pos: 'left' as const, icon: AlignLeft, label: 'Left' },
-                    { pos: 'center' as const, icon: AlignCenter, label: 'Center' },
-                    { pos: 'right' as const, icon: AlignRight, label: 'Right' },
-                  ]).map(({ pos, icon: Icon, label }) => (
-                    <button
-                      key={pos}
-                      onClick={() => setCodeAlign(pos)}
-                      title={label}
-                      className={`p-1.5 rounded-lg transition-colors ${
-                        codeAlign === pos
-                          ? 'bg-violet-500 text-white'
-                          : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
-                      }`}
-                    >
-                      <Icon size={14} />
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-          )}
+          {/* Barcode / QR controls (shared with the inline popover) */}
+          <CodeControls />
 
           <div className="space-y-1.5">
             <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Global Banner Text</label>
@@ -353,193 +224,8 @@ export default function ConfigSidebar() {
               </div>
 
               {expandedField === f.column && (
-                <div className="p-3 pt-0 border-t border-gray-100 mt-2 space-y-4">
-                  {/* Text content + line breaks + inline bold (per-label or all labels) */}
-                  <div className="space-y-1.5 pt-3">
-                    <div className="flex items-center flex-wrap gap-2">
-                      <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
-                        Text (Label #{idx + 1})
-                      </label>
-                      {overrideCountFor(f.column) > 0 && (
-                        <span className="text-[9px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded-md">
-                          {overrideCountFor(f.column)}/{data.length} overridden
-                        </span>
-                      )}
-                      <button
-                        onClick={() => wrapSelectionBold(f.column)}
-                        title="Wrap selected text in **bold**"
-                        className="ml-auto flex items-center gap-1 px-2 py-0.5 rounded-md bg-gray-100 border border-gray-200 text-gray-700 text-[10px] font-black hover:bg-dk-blue-light hover:border-dk-blue/30 hover:text-dk-blue transition-colors"
-                      >
-                        B
-                      </button>
-                    </div>
-                    <textarea
-                      ref={(el) => { textareaRefs.current[f.column] = el; }}
-                      value={displayValue(f.column)}
-                      onChange={(e) => setDataOverride(idx, f.column, e.target.value)}
-                      rows={Math.min(6, Math.max(2, displayValue(f.column).split('\n').length + 1))}
-                      placeholder="(empty)"
-                      className="w-full bg-gray-50 border border-gray-200 rounded-lg py-2 px-2.5 text-xs text-gray-800 font-mono leading-relaxed focus:outline-none focus:ring-2 focus:ring-dk-blue/30 focus:border-dk-blue transition-all resize-y"
-                    />
-
-                    {/* Scope controls: apply to one label vs. all */}
-                    <div className="flex flex-wrap gap-2">
-                      <button
-                        onClick={() => handleApplyToAll(f.column)}
-                        disabled={data.length === 0}
-                        className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-violet-50 border border-violet-200 text-violet-700 text-[10px] font-bold hover:bg-violet-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                        title="Copy this exact text (with line breaks and bold) to every label"
-                      >
-                        <Layers size={11} />
-                        Apply to All {data.length} Labels
-                      </button>
-                      {hasOverride(f.column) && (
-                        <button
-                          onClick={() => clearDataOverride(idx, f.column)}
-                          title="Reset this label only"
-                          className="flex items-center gap-1 px-2 py-1 rounded-md bg-amber-50 border border-amber-200 text-amber-700 text-[10px] font-bold hover:bg-amber-100 transition-colors"
-                        >
-                          <Undo2 size={11} />
-                          Reset This
-                        </button>
-                      )}
-                      {overrideCountFor(f.column) > 0 && (
-                        <button
-                          onClick={() => clearDataOverrideForColumn(f.column)}
-                          title="Reset this field on every label"
-                          className="flex items-center gap-1 px-2 py-1 rounded-md bg-red-50 border border-red-200 text-red-600 text-[10px] font-bold hover:bg-red-100 transition-colors"
-                        >
-                          <Undo2 size={11} />
-                          Reset All
-                        </button>
-                      )}
-                      {appliedFlash?.column === f.column && (
-                        <span className="flex items-center gap-1 px-2 py-1 rounded-md bg-green-50 border border-green-200 text-green-700 text-[10px] font-bold">
-                          <Check size={11} />
-                          Applied to {appliedFlash.count} label{appliedFlash.count !== 1 ? 's' : ''}
-                        </span>
-                      )}
-                    </div>
-
-                    <p className="flex items-center gap-1 text-[10px] text-gray-400">
-                      <CornerDownLeft size={10} />
-                      <span><span className="font-bold text-gray-600">Enter</span> = new line. Wrap in <span className="font-bold text-gray-600">**double asterisks**</span> for bold (or select text and click <span className="font-bold text-gray-600">B</span>). Use <span className="font-bold text-gray-600">Apply to All</span> if every label should read the same.</span>
-                    </p>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-1.5">
-                      <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Role</label>
-                      <select
-                        value={f.role}
-                        onChange={(e) => updateField(f.column, { role: e.target.value as FieldRole })}
-                        className="w-full bg-gray-50 border border-gray-200 rounded-lg py-1.5 px-2 text-xs text-gray-800"
-                      >
-                        <option value="title">Title</option>
-                        <option value="body">Body</option>
-                        <option value="footer">Footer</option>
-                        <option value="hidden">Hidden</option>
-                      </select>
-                    </div>
-                    <div className="space-y-1.5">
-                      <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Font Size</label>
-                      <select
-                        value={f.fontSize}
-                        onChange={(e) => updateField(f.column, { fontSize: e.target.value as FontSize })}
-                        className="w-full bg-gray-50 border border-gray-200 rounded-lg py-1.5 px-2 text-xs text-gray-800"
-                      >
-                        <option value="auto">Auto</option>
-                        <option value="xs">XS</option>
-                        <option value="sm">SM</option>
-                        <option value="md">MD</option>
-                        <option value="lg">LG</option>
-                        <option value="xl">XL</option>
-                      </select>
-                    </div>
-                  </div>
-
-                  {/* Font Style & Weight */}
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-1.5">
-                      <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Font Style</label>
-                      <select
-                        value={f.fontFamily || ''}
-                        onChange={(e) => updateField(f.column, { fontFamily: e.target.value })}
-                        className="w-full bg-gray-50 border border-gray-200 rounded-lg py-1.5 px-2 text-xs text-gray-800"
-                        style={{ fontFamily: f.fontFamily || 'inherit' }}
-                      >
-                        {FONT_FAMILIES.map(ff => (
-                          <option key={ff.value} value={ff.value} style={{ fontFamily: ff.value || 'inherit' }}>
-                            {ff.label}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="space-y-1.5">
-                      <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Font Weight</label>
-                      <select
-                        value={f.fontWeight || '400'}
-                        onChange={(e) => updateField(f.column, { fontWeight: e.target.value as FontWeight })}
-                        className="w-full bg-gray-50 border border-gray-200 rounded-lg py-1.5 px-2 text-xs text-gray-800"
-                      >
-                        <option value="100">Thin</option>
-                        <option value="400">Regular</option>
-                        <option value="600">Semi-Bold</option>
-                        <option value="700">Bold</option>
-                      </select>
-                    </div>
-                  </div>
-
-                  {/* Toggles */}
-                  <div className="flex flex-wrap gap-2 pt-2">
-                    {[
-                      { id: 'uppercase', icon: CaseSensitive, label: 'Upper' },
-                      { id: 'showLabel', icon: Type, label: 'Label' },
-                      { id: 'sameRow', icon: Columns, label: 'Row \u2194' },
-                      { id: 'border', icon: Square, label: 'Box' },
-                      ...(f.border ? [
-                        { id: 'blockStart', icon: SplitSquareVertical, label: 'Split' },
-                        { id: 'mergeUp', icon: Minus, label: 'Merge ↑' },
-                        ...(f.sameRow ? [{ id: 'mergeRight', icon: Minus, label: 'Merge ←' }] : []),
-                        { id: 'openBorder', icon: Columns, label: 'Open' },
-                      ] : []),
-                    ].map(opt => {
-                      const Icon = opt.icon;
-                      const isActive = !!(f as any)[opt.id];
-                      return (
-                        <button
-                          key={opt.id}
-                          onClick={() => updateField(f.column, { [opt.id]: !isActive })}
-                          className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-[10px] font-bold transition-all ${
-                            isActive
-                              ? 'bg-dk-blue-light border-dk-blue/30 text-dk-blue'
-                              : 'bg-gray-50 border-gray-200 text-gray-400 hover:border-gray-300'
-                          }`}
-                        >
-                          <Icon size={12} />
-                          {opt.label}
-                        </button>
-                      );
-                    })}
-                  </div>
-
-                  {/* Alignment */}
-                  <div className="flex bg-gray-50 p-1 rounded-lg border border-gray-200">
-                    {(['left', 'center', 'right'] as Alignment[]).map(align => {
-                      const Icon = align === 'left' ? AlignLeft : align === 'center' ? AlignCenter : AlignRight;
-                      return (
-                        <button
-                          key={align}
-                          onClick={() => updateField(f.column, { align })}
-                          className={`flex-1 flex justify-center py-1 rounded-md transition-all ${
-                            f.align === align ? 'bg-white text-dk-blue shadow-sm' : 'text-gray-400 hover:text-gray-600'
-                          }`}
-                        >
-                          <Icon size={14} />
-                        </button>
-                      );
-                    })}
-                  </div>
+                <div className="p-3 pt-3 border-t border-gray-100 mt-2">
+                  <FieldControls column={f.column} />
                 </div>
               )}
             </div>

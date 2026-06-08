@@ -5,6 +5,7 @@ export type FieldRole = 'title' | 'body' | 'footer' | 'hidden';
 export type FontSize = 'xs' | 'sm' | 'md' | 'lg' | 'xl' | 'auto';
 export type Alignment = 'left' | 'center' | 'right';
 export type LogoPosition = 'left' | 'center' | 'right';
+export type LogoPlacement = 'top' | 'bottom';
 export type CodeType = 'none' | 'barcode' | 'qr';
 export type CodeAlign = 'left' | 'center' | 'right';
 export type FontWeight = '100' | '200' | '300' | '400' | '500' | '600' | '700' | '800' | '900';
@@ -47,8 +48,8 @@ export interface FieldConfig {
 }
 
 /** Migrate legacy saved configs that have `bold` instead of `fontWeight` */
-function migrateFieldConfig(f: any): FieldConfig {
-  const migrated = { ...f };
+function migrateFieldConfig(f: Record<string, unknown>): FieldConfig {
+  const migrated: Record<string, unknown> = { ...f };
   if (!migrated.fontWeight) {
     const bold = migrated.bold;
     delete migrated.bold;
@@ -57,7 +58,7 @@ function migrateFieldConfig(f: any): FieldConfig {
   if (migrated.fontFamily === undefined) {
     migrated.fontFamily = '';
   }
-  return migrated;
+  return migrated as unknown as FieldConfig;
 }
 
 export interface LabelOverride {
@@ -90,6 +91,7 @@ export interface SavedVariation {
   logo: string | null;
   logoPosition: LogoPosition;
   logoSize: number;
+  logoPlacement?: LogoPlacement;
   topRule?: boolean;
   outerBorder?: boolean;
   pinFooter?: boolean;
@@ -110,6 +112,7 @@ export interface LayoutSnapshot {
   logo: string | null;
   logoPosition: LogoPosition;
   logoSize: number;
+  logoPlacement: LogoPlacement;
   topRule: boolean;
   outerBorder: boolean;
   pinFooter: boolean;
@@ -120,13 +123,14 @@ export interface LayoutSnapshot {
 interface LabelState {
   width: number;
   height: number;
-  data: any[];
+  data: Record<string, unknown>[];
   columns: string[];
   config: FieldConfig[];
   previewIdx: number;
   logo: string | null;
   logoPosition: LogoPosition;
   logoSize: number;
+  logoPlacement: LogoPlacement;
   bannerText: string;
   barcodeField: string;
   barcodeOrder: number;
@@ -145,13 +149,14 @@ interface LabelState {
 
   // Actions
   setDimensions: (w: number, h: number) => void;
-  setData: (data: any[], columns: string[]) => void;
+  setData: (data: Record<string, unknown>[], columns: string[]) => void;
   setConfig: (config: FieldConfig[]) => void;
   updateField: (column: string, updates: Partial<FieldConfig>) => void;
   setPreviewIdx: (idx: number) => void;
   setLogo: (logo: string | null) => void;
   setLogoPosition: (pos: LogoPosition) => void;
   setLogoSize: (size: number) => void;
+  setLogoPlacement: (placement: LogoPlacement) => void;
   setBannerText: (text: string) => void;
   setBarcodeField: (field: string) => void;
   setBarcodeOrder: (order: number) => void;
@@ -198,12 +203,12 @@ const fetchVariations = async (): Promise<SavedVariation[]> => {
   try {
     const res = await fetch(`/api/variations?t=${Date.now()}`, { cache: 'no-store' });
     if (res.ok) {
-      const raw: any[] = await res.json();
+      const raw = (await res.json()) as Array<Record<string, unknown>>;
       // Migrate legacy bold → fontWeight in saved configs
       return raw.map(v => ({
         ...v,
-        config: (v.config || []).map(migrateFieldConfig),
-      }));
+        config: ((v.config as unknown[]) || []).map(f => migrateFieldConfig(f as Record<string, unknown>)),
+      })) as unknown as SavedVariation[];
     }
   } catch {
     // API unavailable
@@ -235,6 +240,7 @@ export const useStore = create<LabelState>((set, get) => ({
   logo: null,
   logoPosition: 'left' as LogoPosition,
   logoSize: 100,
+  logoPlacement: 'top' as LogoPlacement,
   bannerText: '',
   barcodeField: '',
   barcodeOrder: 0,
@@ -279,6 +285,7 @@ export const useStore = create<LabelState>((set, get) => ({
   setLogo: (logo) => set({ logo }),
   setLogoPosition: (logoPosition) => set({ logoPosition }),
   setLogoSize: (logoSize) => set({ logoSize }),
+  setLogoPlacement: (logoPlacement) => set({ logoPlacement }),
   setBannerText: (bannerText) => {
     const s = get();
     if (s.editingLabelIdx !== null) {
@@ -392,6 +399,7 @@ export const useStore = create<LabelState>((set, get) => ({
       logo: s.logo,
       logoPosition: s.logoPosition,
       logoSize: s.logoSize,
+      logoPlacement: s.logoPlacement,
       topRule: s.topRule,
       outerBorder: s.outerBorder,
       pinFooter: s.pinFooter,
@@ -435,6 +443,7 @@ export const useStore = create<LabelState>((set, get) => ({
       codeAlign: v.codeAlign ?? s.codeAlign,
       bannerText: v.bannerText,
       logoPosition: v.logoPosition ?? s.logoPosition,
+      logoPlacement: v.logoPlacement ?? s.logoPlacement,
       topRule: v.topRule ?? s.topRule,
       outerBorder: v.outerBorder ?? s.outerBorder,
       pinFooter: v.pinFooter ?? s.pinFooter,
@@ -528,6 +537,7 @@ export const useStore = create<LabelState>((set, get) => ({
       logo: s.logo,
       logoPosition: s.logoPosition,
       logoSize: s.logoSize,
+      logoPlacement: s.logoPlacement,
       topRule: s.topRule,
       outerBorder: s.outerBorder,
       pinFooter: s.pinFooter,
@@ -551,6 +561,7 @@ export const useStore = create<LabelState>((set, get) => ({
       logo: snapshot.logo,
       logoPosition: snapshot.logoPosition,
       logoSize: snapshot.logoSize,
+      logoPlacement: snapshot.logoPlacement ?? 'top',
       topRule: snapshot.topRule,
       outerBorder: snapshot.outerBorder ?? true,
       pinFooter: snapshot.pinFooter ?? true,

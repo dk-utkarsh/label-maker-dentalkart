@@ -2,7 +2,7 @@
 
 import { useState, useRef, useCallback } from 'react';
 import * as XLSX from 'xlsx';
-import { useStore, type FieldConfig, type LayoutSnapshot } from '@/lib/store';
+import { useStore, type FieldConfig, type FieldRole, type LayoutSnapshot } from '@/lib/store';
 import { FileSpreadsheet, Image as ImageIcon, X, Ruler, CheckCircle, AlignLeft, AlignCenter, AlignRight, Layers, Copy, Check } from 'lucide-react';
 
 const PRESET_SIZES = [
@@ -28,7 +28,7 @@ export default function UploadSection() {
   const generateConfigForColumns = useCallback((cols: string[]): FieldConfig[] => {
     return cols.map((col, i) => {
       const lower = col.toLowerCase();
-      let role: any = 'body';
+      let role: FieldRole = 'body';
       if (i === 0 || lower.includes('name') || lower.includes('product')) role = 'title';
       else if (lower.includes('sku') || lower.includes('id') || lower.includes('mfg') || lower.includes('exp')) role = 'footer';
 
@@ -52,9 +52,9 @@ export default function UploadSection() {
   const loadSheetData = useCallback((wb: XLSX.WorkBook, sheetName: string): string[] | null => {
     const ws = wb.Sheets[sheetName];
     if (!ws) return null;
-    const sheetData = XLSX.utils.sheet_to_json(ws);
+    const sheetData = XLSX.utils.sheet_to_json(ws) as Record<string, unknown>[];
     if (!sheetData.length) return null;
-    const cols = Object.keys(sheetData[0] as any);
+    const cols = Object.keys(sheetData[0]);
     setData(sheetData, cols);
     return cols;
   }, [setData]);

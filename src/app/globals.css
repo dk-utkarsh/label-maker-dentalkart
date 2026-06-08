@@ -70,6 +70,18 @@ input[type="number"]::-webkit-outer-spin-button {
   -webkit-user-drag: element;
 }
 
+/* Inline editing affordances — only in the live editable preview, never in exports
+   (:hover is inactive during html-to-image capture, so outlines never leak into output) */
+.label-preview-inner [data-field-column],
+.label-preview-inner [data-element] {
+  cursor: pointer;
+}
+.label-preview-inner [data-field-column]:hover,
+.label-preview-inner [data-element]:hover {
+  outline: 1.5px dashed rgba(43, 124, 184, 0.5);
+  outline-offset: 1px;
+}
+
 /* Modal backdrop */
 .modal-backdrop {
   animation: fadeIn 0.15s ease-out;
