@@ -89,11 +89,18 @@ export interface SavedVariation {
   qrSize: number;
   codeType: CodeType;
   codeAlign: CodeAlign;
+  barcodeFree?: boolean;
+  barcodeX?: number;
+  barcodeY?: number;
   bannerText: string;
   logo: string | null;
   logoPosition: LogoPosition;
   logoSize: number;
   logoPlacement?: LogoPlacement;
+  sticker?: string | null;
+  stickerX?: number;
+  stickerY?: number;
+  stickerSize?: number;
   topRule?: boolean;
   outerBorder?: boolean;
   pinFooter?: boolean;
@@ -110,11 +117,18 @@ export interface LayoutSnapshot {
   qrSize: number;
   codeType: CodeType;
   codeAlign: CodeAlign;
+  barcodeFree: boolean;
+  barcodeX: number;
+  barcodeY: number;
   bannerText: string;
   logo: string | null;
   logoPosition: LogoPosition;
   logoSize: number;
   logoPlacement: LogoPlacement;
+  sticker: string | null;
+  stickerX: number;
+  stickerY: number;
+  stickerSize: number;
   topRule: boolean;
   outerBorder: boolean;
   pinFooter: boolean;
@@ -133,6 +147,10 @@ interface LabelState {
   logoPosition: LogoPosition;
   logoSize: number;
   logoPlacement: LogoPlacement;
+  sticker: string | null;
+  stickerX: number;
+  stickerY: number;
+  stickerSize: number;
   bannerText: string;
   barcodeField: string;
   barcodeOrder: number;
@@ -140,6 +158,9 @@ interface LabelState {
   qrSize: number;
   codeType: CodeType;
   codeAlign: CodeAlign;
+  barcodeFree: boolean;
+  barcodeX: number;
+  barcodeY: number;
   topRule: boolean;
   outerBorder: boolean;
   pinFooter: boolean;
@@ -159,6 +180,9 @@ interface LabelState {
   setLogoPosition: (pos: LogoPosition) => void;
   setLogoSize: (size: number) => void;
   setLogoPlacement: (placement: LogoPlacement) => void;
+  setSticker: (sticker: string | null) => void;
+  setStickerPos: (x: number, y: number) => void;
+  setStickerSize: (size: number) => void;
   setBannerText: (text: string) => void;
   setBarcodeField: (field: string) => void;
   setBarcodeOrder: (order: number) => void;
@@ -166,6 +190,8 @@ interface LabelState {
   setQrSize: (size: number) => void;
   setCodeType: (type: CodeType) => void;
   setCodeAlign: (align: CodeAlign) => void;
+  setBarcodeFree: (free: boolean) => void;
+  setBarcodePos: (x: number, y: number) => void;
   reorderConfig: (from: number, to: number) => void;
   setTopRule: (v: boolean) => void;
   setOuterBorder: (v: boolean) => void;
@@ -244,6 +270,10 @@ export const useStore = create<LabelState>((set, get) => ({
   logoPosition: 'left' as LogoPosition,
   logoSize: 100,
   logoPlacement: 'top' as LogoPlacement,
+  sticker: null,
+  stickerX: 60,
+  stickerY: 55,
+  stickerSize: 28,
   bannerText: '',
   barcodeField: '',
   barcodeOrder: 0,
@@ -251,6 +281,9 @@ export const useStore = create<LabelState>((set, get) => ({
   qrSize: 100,
   codeType: 'barcode' as CodeType,
   codeAlign: 'center' as CodeAlign,
+  barcodeFree: false,
+  barcodeX: 50,
+  barcodeY: 82,
   topRule: false,
   outerBorder: true,
   pinFooter: true,
@@ -289,6 +322,9 @@ export const useStore = create<LabelState>((set, get) => ({
   setLogoPosition: (logoPosition) => set({ logoPosition }),
   setLogoSize: (logoSize) => set({ logoSize }),
   setLogoPlacement: (logoPlacement) => set({ logoPlacement }),
+  setSticker: (sticker) => set({ sticker }),
+  setStickerPos: (stickerX, stickerY) => set({ stickerX, stickerY }),
+  setStickerSize: (stickerSize) => set({ stickerSize }),
   setBannerText: (bannerText) => {
     const s = get();
     if (s.editingLabelIdx !== null) {
@@ -360,6 +396,8 @@ export const useStore = create<LabelState>((set, get) => ({
       set({ codeAlign });
     }
   },
+  setBarcodeFree: (barcodeFree) => set({ barcodeFree }),
+  setBarcodePos: (barcodeX, barcodeY) => set({ barcodeX, barcodeY }),
   reorderConfig: (from, to) => set((state) => {
     const newConfig = [...state.config];
     const [moved] = newConfig.splice(from, 1);
@@ -398,11 +436,18 @@ export const useStore = create<LabelState>((set, get) => ({
       qrSize: s.qrSize,
       codeType: s.codeType,
       codeAlign: s.codeAlign,
+      barcodeFree: s.barcodeFree,
+      barcodeX: s.barcodeX,
+      barcodeY: s.barcodeY,
       bannerText: s.bannerText,
       logo: s.logo,
       logoPosition: s.logoPosition,
       logoSize: s.logoSize,
       logoPlacement: s.logoPlacement,
+      sticker: s.sticker,
+      stickerX: s.stickerX,
+      stickerY: s.stickerY,
+      stickerSize: s.stickerSize,
       topRule: s.topRule,
       outerBorder: s.outerBorder,
       pinFooter: s.pinFooter,
@@ -444,9 +489,16 @@ export const useStore = create<LabelState>((set, get) => ({
       qrSize: v.qrSize ?? 100,
       codeType: v.codeType ?? s.codeType,
       codeAlign: v.codeAlign ?? s.codeAlign,
+      barcodeFree: v.barcodeFree ?? s.barcodeFree,
+      barcodeX: v.barcodeX ?? s.barcodeX,
+      barcodeY: v.barcodeY ?? s.barcodeY,
       bannerText: v.bannerText,
       logoPosition: v.logoPosition ?? s.logoPosition,
       logoPlacement: v.logoPlacement ?? s.logoPlacement,
+      sticker: v.sticker ?? s.sticker,
+      stickerX: v.stickerX ?? s.stickerX,
+      stickerY: v.stickerY ?? s.stickerY,
+      stickerSize: v.stickerSize ?? s.stickerSize,
       topRule: v.topRule ?? s.topRule,
       outerBorder: v.outerBorder ?? s.outerBorder,
       pinFooter: v.pinFooter ?? s.pinFooter,
@@ -567,11 +619,18 @@ export const useStore = create<LabelState>((set, get) => ({
       qrSize: s.qrSize,
       codeType: s.codeType,
       codeAlign: s.codeAlign,
+      barcodeFree: s.barcodeFree,
+      barcodeX: s.barcodeX,
+      barcodeY: s.barcodeY,
       bannerText: s.bannerText,
       logo: s.logo,
       logoPosition: s.logoPosition,
       logoSize: s.logoSize,
       logoPlacement: s.logoPlacement,
+      sticker: s.sticker,
+      stickerX: s.stickerX,
+      stickerY: s.stickerY,
+      stickerSize: s.stickerSize,
       topRule: s.topRule,
       outerBorder: s.outerBorder,
       pinFooter: s.pinFooter,
@@ -591,11 +650,18 @@ export const useStore = create<LabelState>((set, get) => ({
       qrSize: snapshot.qrSize,
       codeType: snapshot.codeType,
       codeAlign: snapshot.codeAlign,
+      barcodeFree: snapshot.barcodeFree ?? false,
+      barcodeX: snapshot.barcodeX ?? 50,
+      barcodeY: snapshot.barcodeY ?? 82,
       bannerText: snapshot.bannerText,
       logo: snapshot.logo,
       logoPosition: snapshot.logoPosition,
       logoSize: snapshot.logoSize,
       logoPlacement: snapshot.logoPlacement ?? 'top',
+      sticker: snapshot.sticker ?? null,
+      stickerX: snapshot.stickerX ?? 60,
+      stickerY: snapshot.stickerY ?? 55,
+      stickerSize: snapshot.stickerSize ?? 28,
       topRule: snapshot.topRule,
       outerBorder: snapshot.outerBorder ?? true,
       pinFooter: snapshot.pinFooter ?? true,

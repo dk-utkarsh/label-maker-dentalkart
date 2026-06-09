@@ -21,7 +21,7 @@ function parseInline(text: unknown): React.ReactNode {
 
 export default function LabelPreview({ overrideIdx }: { overrideIdx?: number } = {}) {
   const store = useStore();
-  const { width, height, data, previewIdx, topRule, outerBorder, pinFooter, logoPlacement } = store;
+  const { width, height, data, previewIdx, topRule, outerBorder, pinFooter, logoPlacement, sticker, stickerX, stickerY, stickerSize, barcodeFree, barcodeX, barcodeY } = store;
   const idx = overrideIdx ?? previewIdx;
   const effective = store.getEffectiveConfig(idx);
   const { config, logo, logoPosition, logoSize, bannerText, barcodeField, barcodeOrder, barcodeSize, qrSize, codeType, codeAlign } = effective;
@@ -301,7 +301,17 @@ export default function LabelPreview({ overrideIdx }: { overrideIdx?: number } =
   const codeElement = hasCode ? (
     <div
       data-element="code"
-      style={{
+      style={barcodeFree ? {
+        position: 'absolute',
+        left: `${barcodeX}%`,
+        top: `${barcodeY}%`,
+        transform: 'translate(-50%, -50%)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: `${fieldGap}px`,
+        zIndex: 5,
+      } : {
         margin: `${sectionGap * 0.5}px 0`,
         display: 'flex',
         justifyContent: codeRowFields.length > 0 ? 'flex-start' : alignMap[codeAlign ?? 'center'],
@@ -342,6 +352,7 @@ export default function LabelPreview({ overrideIdx }: { overrideIdx?: number } =
         {logo ? (
           <img
             src={logo}
+            draggable={false}
             style={{ maxWidth: `${30 * ((logoSize ?? 100) / 100)}%`, maxHeight: hPx * 0.13 * ((logoSize ?? 100) / 100) }}
             className="object-contain"
             alt="Logo"
@@ -373,6 +384,7 @@ export default function LabelPreview({ overrideIdx }: { overrideIdx?: number } =
           height: `${hPx}px`,
           padding: `${pad}px`,
           backgroundColor: '#ffffff',
+          position: 'relative',
         }}
         className={`label-content shadow-2xl rounded-sm flex flex-col overflow-hidden ${outerBorder ? 'border-2' : ''}`}
       >
@@ -392,7 +404,7 @@ export default function LabelPreview({ overrideIdx }: { overrideIdx?: number } =
         {logoPlacement !== 'bottom' && renderLogo(false)}
 
         {/* Barcode: before-title */}
-        {barcodeSection === 'before-title' && codeElement}
+        {!barcodeFree && barcodeSection === 'before-title' && codeElement}
 
         {/* Titles */}
         {titles.length > 0 && (
@@ -402,7 +414,7 @@ export default function LabelPreview({ overrideIdx }: { overrideIdx?: number } =
         )}
 
         {/* Barcode: after-title (default) */}
-        {barcodeSection === 'after-title' && codeElement}
+        {!barcodeFree && barcodeSection === 'after-title' && codeElement}
 
         {/* Body — takes remaining vertical space only when footer is pinned */}
         <div style={{ flex: pinFooter ? 1 : undefined }}>
@@ -410,7 +422,7 @@ export default function LabelPreview({ overrideIdx }: { overrideIdx?: number } =
         </div>
 
         {/* Barcode: after-body */}
-        {barcodeSection === 'after-body' && codeElement}
+        {!barcodeFree && barcodeSection === 'after-body' && codeElement}
 
         {/* Footers — pinned to bottom or flowing inline */}
         {hasFooters && (
@@ -426,7 +438,10 @@ export default function LabelPreview({ overrideIdx }: { overrideIdx?: number } =
         )}
 
         {/* Barcode: after-footer */}
-        {barcodeSection === 'after-footer' && codeElement}
+        {!barcodeFree && barcodeSection === 'after-footer' && codeElement}
+
+        {/* Barcode: free-positioned overlay */}
+        {barcodeFree && codeElement}
 
         {/* Logo — bottom placement */}
         {logoPlacement === 'bottom' && renderLogo(true)}
@@ -446,6 +461,25 @@ export default function LabelPreview({ overrideIdx }: { overrideIdx?: number } =
           >
             {bannerText}
           </div>
+        )}
+
+        {/* Sticker — free-floating overlay (placed/resized by dragging on the label) */}
+        {sticker && (
+          <img
+            data-element="sticker"
+            src={sticker}
+            alt="Sticker"
+            draggable={false}
+            style={{
+              position: 'absolute',
+              left: `${stickerX}%`,
+              top: `${stickerY}%`,
+              width: `${stickerSize}%`,
+              height: 'auto',
+              objectFit: 'contain',
+              zIndex: 6,
+            }}
+          />
         )}
       </div>
     </div>

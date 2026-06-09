@@ -2,18 +2,19 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { useStore } from '@/lib/store';
+import { useStore, type CodeAlign } from '@/lib/store';
 import { markupToHtml } from '@/lib/richtext';
 import LabelPreview from './LabelPreview';
 import FieldControls from './FieldControls';
 import CodeControls from './CodeControls';
 import LogoControls from './LogoControls';
+import StickerControls from './StickerControls';
 import RichTextField from './RichTextField';
-import { X, Globe, Pencil, GripVertical, Image as ImageIcon, Barcode, Megaphone } from 'lucide-react';
+import { X, Globe, Pencil, GripVertical, Image as ImageIcon, Barcode, Megaphone, Sticker as StickerIcon } from 'lucide-react';
 
 interface Rect { top: number; left: number; width: number; height: number; }
 interface PopoverPos { left: number; top: number; maxHeight: number; }
-type ElKind = 'logo' | 'code' | 'banner';
+type ElKind = 'logo' | 'code' | 'banner' | 'sticker';
 type DropMode = 'before' | 'after' | 'row-after';
 
 const POPOVER_WIDTH = 300;
@@ -58,6 +59,7 @@ export default function EditablePreview() {
   const dragKeyRef = useRef<string | null>(null);
   const dropTargetRef = useRef<{ col: string; mode: DropMode } | null>(null);
   const logoDropRef = useRef<'top' | 'bottom' | null>(null);
+  const codeDropRef = useRef<{ order: number; align: CodeAlign } | null>(null);
   const justDraggedRef = useRef(false); // suppress the click that fires right after a drag
 
   const idx = editingLabelIdx ?? previewIdx;
@@ -134,6 +136,7 @@ export default function EditablePreview() {
       if (editorRef.current?.contains(t)) return;
       if ((t as HTMLElement)?.closest?.('[data-rte-toolbar]')) return;
       if ((t as HTMLElement)?.closest?.('[data-drag-handle]')) return;
+      if ((t as HTMLElement)?.closest?.('[data-resize-handle]')) return;
       if ((t as HTMLElement)?.closest?.('[data-field-column]')) return;
       if ((t as HTMLElement)?.closest?.('[data-element]')) return;
       setSelectedKey(null);
@@ -209,11 +212,13 @@ export default function EditablePreview() {
   const attachDrag = (key: string, initialEv?: PointerEvent) => {
     const parsed = parseKey(key);
     const isLogo = parsed.kind === 'el' && parsed.el === 'logo';
+    const isCode = parsed.kind === 'el' && parsed.el === 'code';
     const dragCol = parsed.kind === 'field' ? parsed.column : null;
-    if (!isLogo && !dragCol) return;
+    if (!isLogo && !isCode && !dragCol) return;
     dragKeyRef.current = key;
     dropTargetRef.current = null;
     logoDropRef.current = null;
+    codeDropRef.current = null;
     draggingRef.current = true;
     const prevUserSelect = document.body.style.userSelect;
     document.body.style.userSelect = 'none';
@@ -223,6 +228,26 @@ export default function EditablePreview() {
       const wrap = wrapRef.current;
       if (!wrap) return;
       const wr = wrap.getBoundingClientRect();
+
+      if (isCode) {
+        // Guided: reorder the barcode among the sections (barcodeOrder) + set left/center/right by drop X.
+        const disp = dispConfigNow();
+        const els = Array.from(wrap.querySelectorAll('.label-content [data-field-column]')) as HTMLElement[];
+        if (!els.length) return;
+        let target = els[0]; let best = Infinity;
+        for (const el of els) { const r = el.getBoundingClientRect(); const cy = r.top + r.height / 2; const d = Math.abs(ev.clientY - cy); if (d < best) { best = d; target = el; } }
+        const tr = target.getBoundingClientRect();
+        const after = ev.clientY > tr.top + tr.height / 2;
+        const tIdx = disp.findIndex(f => f.column === (target.dataset.fieldColumn || ''));
+        const order = tIdx < 0 ? disp.length : (after ? tIdx + 1 : tIdx);
+        const content = wrap.querySelector('.label-content') as HTMLElement | null;
+        const ccr = (content || wrap).getBoundingClientRect();
+        const relx = (ev.clientX - ccr.left) / ccr.width;
+        const align: CodeAlign = relx < 0.34 ? 'left' : relx > 0.66 ? 'right' : 'center';
+        setDropLine({ top: (after ? tr.bottom : tr.top) - wr.top, left: tr.left - wr.left, width: tr.width });
+        codeDropRef.current = { order, align };
+        return;
+      }
 
       if (isLogo) {
         // Logo: decide top vs bottom by pointer position relative to label mid-line.
@@ -269,7 +294,12 @@ export default function EditablePreview() {
     const onUp = () => {
       document.removeEventListener('pointermove', onMove);
       try {
-        if (isLogo) {
+        if (isCode) {
+          if (codeDropRef.current) {
+            useStore.getState().setBarcodeOrder(codeDropRef.current.order);
+            useStore.getState().setCodeAlign(codeDropRef.current.align);
+          }
+        } else if (isLogo) {
           if (logoDropRef.current) useStore.getState().setLogoPlacement(logoDropRef.current);
         } else if (dragCol) {
           const tgt = dropTargetRef.current;
@@ -294,6 +324,7 @@ export default function EditablePreview() {
         dragKeyRef.current = null;
         dropTargetRef.current = null;
         logoDropRef.current = null;
+        codeDropRef.current = null;
         setDropLine(null);
         document.body.style.userSelect = prevUserSelect;
         // clear the click-suppression flag after the trailing click has had a chance to fire
@@ -314,9 +345,71 @@ export default function EditablePreview() {
     if (t?.closest?.('[data-drag-handle]')) return;
     if (popoverRef.current?.contains(t)) return;
     if (t?.tagName === 'TEXTAREA') return;
+    if (t?.closest?.('[data-resize-handle]')) return;
     const key = keyAt(e.target);
     if (!key) return;
     const p = parseKey(key);
+
+    // Sticker & barcode/QR: dedicated FREE move (place anywhere). Listeners are attached at
+    // pointerdown (like the resize handler) so the live position updates reliably during the drag.
+    const freeEl: 'sticker' | 'code' | null =
+      p.kind === 'el' && (p.el === 'sticker' || p.el === 'code') ? p.el : null;
+    if (freeEl) {
+      e.preventDefault(); // images are natively draggable; this stops the browser drag that cancels pointers
+      const wrap = wrapRef.current;
+      const content = wrap?.querySelector('.label-content') as HTMLElement | null;
+      if (!content) return;
+      const cr = content.getBoundingClientRect();
+      const s = useStore.getState();
+      // Starting position (% of the label). For a not-yet-free barcode, capture its current rendered
+      // centre so switching to free placement doesn't make it jump.
+      let startPos: { x: number; y: number };
+      if (freeEl === 'sticker') {
+        startPos = { x: s.stickerX, y: s.stickerY };
+      } else if (s.barcodeFree) {
+        startPos = { x: s.barcodeX, y: s.barcodeY };
+      } else {
+        const codeEl = wrap?.querySelector('[data-element="code"]') as HTMLElement | null;
+        const br = codeEl?.getBoundingClientRect();
+        startPos = br
+          ? { x: ((br.left + br.width / 2 - cr.left) / cr.width) * 100, y: ((br.top + br.height / 2 - cr.top) / cr.height) * 100 }
+          : { x: s.barcodeX, y: s.barcodeY };
+      }
+      const sx0 = e.clientX, sy0 = e.clientY;
+      const pointerId = e.pointerId;
+      let started = false;
+      const prevUserSelect = document.body.style.userSelect;
+      try { wrap?.setPointerCapture(pointerId); } catch { /* ignore */ }
+      const mv = (ev: PointerEvent) => {
+        if (!started) {
+          if (Math.hypot(ev.clientX - sx0, ev.clientY - sy0) < 4) return;
+          started = true;
+          draggingRef.current = true;
+          document.body.style.userSelect = 'none';
+          if (freeEl === 'code') {
+            useStore.getState().setBarcodePos(startPos.x, startPos.y);
+            useStore.getState().setBarcodeFree(true);
+          }
+        }
+        justDraggedRef.current = true;
+        const nx = Math.max(-10, Math.min(100, startPos.x + ((ev.clientX - sx0) / cr.width) * 100));
+        const ny = Math.max(-10, Math.min(100, startPos.y + ((ev.clientY - sy0) / cr.height) * 100));
+        if (freeEl === 'sticker') useStore.getState().setStickerPos(nx, ny);
+        else useStore.getState().setBarcodePos(nx, ny);
+      };
+      const upp = () => {
+        document.removeEventListener('pointermove', mv);
+        try { wrap?.releasePointerCapture(pointerId); } catch { /* ignore */ }
+        draggingRef.current = false;
+        document.body.style.userSelect = prevUserSelect;
+        if (started) setSelectedKey(key);
+        setTimeout(() => { justDraggedRef.current = false; }, 0);
+      };
+      document.addEventListener('pointermove', mv);
+      document.addEventListener('pointerup', upp, { once: true });
+      return;
+    }
+
     const draggable = p.kind === 'field' || (p.kind === 'el' && p.el === 'logo');
     if (!draggable) return;
     const sx = e.clientX, sy = e.clientY;
@@ -335,8 +428,48 @@ export default function EditablePreview() {
     document.addEventListener('pointerup', up);
   };
 
+  // Drag the corner handle to resize the sticker or the free-positioned barcode/QR.
+  const startResize = (e: React.PointerEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const wrap = wrapRef.current;
+    const content = wrap?.querySelector('.label-content') as HTMLElement | null;
+    if (!content) return;
+    const cr = content.getBoundingClientRect();
+    const startX = e.clientX;
+    const st = useStore.getState();
+    const sp = selectedKey ? parseKey(selectedKey) : null;
+    const resizingCode = sp?.kind === 'el' && sp.el === 'code';
+    const isQr = st.getEffectiveConfig(st.editingLabelIdx ?? st.previewIdx).codeType === 'qr';
+    const startSize = resizingCode ? (isQr ? st.qrSize : st.barcodeSize) : st.stickerSize;
+    draggingRef.current = true;
+    const prevUserSelect = document.body.style.userSelect;
+    document.body.style.userSelect = 'none';
+    const onMove = (ev: PointerEvent) => {
+      justDraggedRef.current = true;
+      const dw = ((ev.clientX - startX) / cr.width) * 100;
+      if (resizingCode) {
+        const ns = Math.max(30, Math.min(200, startSize + dw * 3));
+        if (isQr) useStore.getState().setQrSize(ns); else useStore.getState().setBarcodeSize(ns);
+      } else {
+        useStore.getState().setStickerSize(Math.max(5, Math.min(100, startSize + dw)));
+      }
+    };
+    const onUp = () => {
+      document.removeEventListener('pointermove', onMove);
+      draggingRef.current = false;
+      document.body.style.userSelect = prevUserSelect;
+      setTimeout(() => { justDraggedRef.current = false; }, 0);
+    };
+    document.addEventListener('pointermove', onMove);
+    document.addEventListener('pointerup', onUp, { once: true });
+  };
+
   const selParsed = selectedKey ? parseKey(selectedKey) : null;
   const canDrag = selParsed && (selParsed.kind === 'field' || (selParsed.kind === 'el' && selParsed.el === 'logo'));
+  const isSticker = selParsed?.kind === 'el' && selParsed.el === 'sticker';
+  const isFreeCode = selParsed?.kind === 'el' && selParsed.el === 'code' && store.barcodeFree;
+  const isResizable = isSticker || isFreeCode;
 
   // Popover header label + body per selection kind.
   const headerFor = () => {
@@ -344,10 +477,11 @@ export default function EditablePreview() {
     if (selParsed.kind === 'field') return { icon: null, title: selParsed.column, dot: 'bg-dk-blue' };
     if (selParsed.el === 'logo') return { icon: <ImageIcon size={13} className="text-dk-orange" />, title: 'Logo', dot: 'bg-dk-orange' };
     if (selParsed.el === 'code') return { icon: <Barcode size={13} className="text-violet-500" />, title: 'Barcode / QR', dot: 'bg-violet-500' };
+    if (selParsed.el === 'sticker') return { icon: <StickerIcon size={13} className="text-violet-600" />, title: 'Sticker', dot: 'bg-violet-600' };
     return { icon: <Megaphone size={13} className="text-gray-700" />, title: 'Banner', dot: 'bg-gray-700' };
   };
   const header = headerFor();
-  const isGlobalOnly = selParsed?.kind === 'el' && selParsed.el === 'logo';
+  const isGlobalOnly = selParsed?.kind === 'el' && (selParsed.el === 'logo' || selParsed.el === 'sticker');
 
   return (
     <div ref={wrapRef} className="relative" onClick={handleClick} onDoubleClick={handleDoubleClick} onPointerDown={onWrapPointerDown}>
@@ -370,12 +504,20 @@ export default function EditablePreview() {
           {canDrag && (
             <div
               className="pointer-events-auto absolute -left-3 top-1/2 -translate-y-1/2 flex items-center justify-center w-5 h-6 rounded bg-dk-blue text-white shadow cursor-grab active:cursor-grabbing touch-none"
-              title={selParsed?.kind === 'el' ? 'Drag to move top / bottom' : 'Drag to move'}
+              title="Drag to move"
               data-drag-handle
               onPointerDown={(e) => { e.preventDefault(); e.stopPropagation(); if (selectedKey) attachDrag(selectedKey, e.nativeEvent); }}
             >
               <GripVertical size={12} />
             </div>
+          )}
+          {isResizable && (
+            <div
+              className="pointer-events-auto absolute -right-1.5 -bottom-1.5 w-3.5 h-3.5 rounded-sm bg-white border-2 border-dk-blue shadow cursor-nwse-resize touch-none"
+              title="Drag to resize"
+              data-resize-handle
+              onPointerDown={startResize}
+            />
           )}
         </div>
       )}
@@ -480,6 +622,7 @@ export default function EditablePreview() {
             {selParsed.kind === 'field' && <FieldControls column={selParsed.column} />}
             {selParsed.kind === 'el' && selParsed.el === 'logo' && <LogoControls />}
             {selParsed.kind === 'el' && selParsed.el === 'code' && <CodeControls />}
+            {selParsed.kind === 'el' && selParsed.el === 'sticker' && <StickerControls />}
             {selParsed.kind === 'el' && selParsed.el === 'banner' && (
               <div className="space-y-1.5">
                 <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Banner Text</label>

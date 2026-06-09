@@ -9,7 +9,7 @@ import { AlignLeft, AlignCenter, AlignRight } from 'lucide-react';
  */
 export default function CodeControls() {
   const store = useStore();
-  const { setBarcodeField, setBarcodeSize, setQrSize, setCodeType, setCodeAlign, columns, editingLabelIdx, previewIdx } = store;
+  const { setBarcodeField, setBarcodeSize, setQrSize, setCodeType, setCodeAlign, columns, editingLabelIdx, previewIdx, barcodeFree, setBarcodeFree } = store;
   const idx = editingLabelIdx ?? previewIdx;
   const effective = store.getEffectiveConfig(idx);
   const barcodeField = editingLabelIdx !== null ? effective.barcodeField : store.barcodeField;
@@ -86,8 +86,32 @@ export default function CodeControls() {
         </div>
       )}
 
-      {/* Code Position */}
+      {/* Placement: Auto (flow) vs Free (drag anywhere) */}
       {codeType !== 'none' && barcodeField && (
+        <div className="space-y-1.5">
+          <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Placement</label>
+          <div className="flex gap-1 p-1 bg-gray-100 rounded-lg">
+            {([
+              { value: false, label: 'Auto' },
+              { value: true, label: 'Free (drag)' },
+            ]).map(({ value, label }) => (
+              <button
+                key={label}
+                onClick={() => setBarcodeFree(value)}
+                className={`flex-1 py-1.5 rounded-md text-xs font-bold transition-all ${
+                  barcodeFree === value ? 'bg-white text-dk-blue shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          {barcodeFree && <p className="text-[10px] text-gray-400">Drag the code on the label to place it anywhere; drag its corner to resize.</p>}
+        </div>
+      )}
+
+      {/* Code Position (Auto mode only) */}
+      {!barcodeFree && codeType !== 'none' && barcodeField && (
         <div className="space-y-1.5">
           <div className="flex items-center gap-2">
             <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">

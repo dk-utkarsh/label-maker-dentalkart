@@ -3,7 +3,7 @@
 import { useState, useRef, useCallback } from 'react';
 import * as XLSX from 'xlsx';
 import { useStore, type FieldConfig, type FieldRole, type LayoutSnapshot } from '@/lib/store';
-import { FileSpreadsheet, Image as ImageIcon, X, Ruler, CheckCircle, AlignLeft, AlignCenter, AlignRight, Layers, Copy, Check } from 'lucide-react';
+import { FileSpreadsheet, Image as ImageIcon, X, Ruler, CheckCircle, AlignLeft, AlignCenter, AlignRight, Layers, Copy, Check, Sticker as StickerIcon } from 'lucide-react';
 
 const PRESET_SIZES = [
   { label: '62 x 100', w: 62, h: 100 },
@@ -15,9 +15,10 @@ const PRESET_SIZES = [
 
 export default function UploadSection() {
   const store = useStore();
-  const { width, height, setDimensions, setData, setConfig, setLogo, logo, logoPosition, setLogoPosition, logoSize, setLogoSize, data, columns, getLayoutSnapshot, setLayoutSnapshot } = store;
+  const { width, height, setDimensions, setData, setConfig, setLogo, logo, logoPosition, setLogoPosition, logoSize, setLogoSize, sticker, setSticker, data, columns, getLayoutSnapshot, setLayoutSnapshot } = store;
   const [isDraggingExcel, setIsDraggingExcel] = useState(false);
   const [isDraggingLogo, setIsDraggingLogo] = useState(false);
+  const [isDraggingSticker, setIsDraggingSticker] = useState(false);
   const [excelFileName, setExcelFileName] = useState('');
   const [sheetNames, setSheetNames] = useState<string[]>([]);
   const [activeSheet, setActiveSheet] = useState('');
@@ -118,6 +119,12 @@ export default function UploadSection() {
     reader.readAsDataURL(file);
   };
 
+  const handleSticker = (file: File) => {
+    const reader = new FileReader();
+    reader.onload = (e) => setSticker(e.target?.result as string);
+    reader.readAsDataURL(file);
+  };
+
   const hasData = data.length > 0;
 
   const clearExcel = (e: React.MouseEvent) => {
@@ -135,7 +142,7 @@ export default function UploadSection() {
 
   return (
     <div className="space-y-4">
-      <div className={`grid grid-cols-1 gap-4 ${sheetNames.length > 1 ? 'md:grid-cols-4' : 'md:grid-cols-3'}`}>
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
         {/* Excel Upload */}
         <div
           onDragOver={(e) => { e.preventDefault(); setIsDraggingExcel(true); }}
@@ -346,6 +353,48 @@ export default function UploadSection() {
             </div>
           </div>
         )}
+
+        {/* Sticker Upload */}
+        <div
+          onDragOver={(e) => { e.preventDefault(); setIsDraggingSticker(true); }}
+          onDragLeave={() => setIsDraggingSticker(false)}
+          onDrop={(e) => { e.preventDefault(); setIsDraggingSticker(false); if (e.dataTransfer.files[0]) handleSticker(e.dataTransfer.files[0]); }}
+          className={`relative border-2 border-dashed rounded-2xl p-6 text-center transition-all bg-white ${
+            sticker
+              ? 'border-violet-400/40 bg-violet-50/30'
+              : isDraggingSticker ? 'border-violet-500 bg-violet-50' : 'border-gray-300 hover:border-violet-400/50'
+          }`}
+        >
+          {sticker ? (
+            <div className="relative h-16 w-full flex items-center justify-center">
+              <img src={sticker} className="max-h-full max-w-full object-contain" alt="Sticker" />
+              <button
+                onClick={(e) => { e.stopPropagation(); setSticker(null); }}
+                className="absolute -top-3 -right-3 p-1.5 rounded-full bg-red-100 text-red-500 hover:bg-red-500 hover:text-white transition-colors shadow-sm"
+              >
+                <X size={12} />
+              </button>
+            </div>
+          ) : (
+            <>
+              <input
+                type="file"
+                accept="image/*"
+                onChange={(e) => { if (e.target.files?.[0]) handleSticker(e.target.files[0]); }}
+                className="absolute inset-0 opacity-0 cursor-pointer"
+              />
+              <div className="flex flex-col items-center gap-2.5">
+                <div className="w-12 h-12 rounded-2xl bg-violet-100 flex items-center justify-center text-violet-600">
+                  <StickerIcon size={24} />
+                </div>
+                <div>
+                  <p className="font-bold text-gray-800 text-sm">Sticker</p>
+                  <p className="text-[10px] text-gray-400 mt-0.5">Drag it on the label to place &amp; resize</p>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
 
         {/* Dimensions */}
         <div className="p-5 rounded-2xl bg-white border border-gray-200 shadow-sm">
