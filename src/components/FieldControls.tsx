@@ -30,8 +30,45 @@ export default function FieldControls({ column }: { column: string }) {
 
   if (!f) return null;
 
+  // Toggle free placement. When turning free on, capture the field's current rendered
+  // position from the DOM so it doesn't jump.
+  const setFieldFree = (free: boolean) => {
+    if (!free) { updateField(column, { free: false }); return; }
+    const el = document.querySelector(`.label-content [data-field-column="${CSS.escape(column)}"]`);
+    const content = document.querySelector('.label-content');
+    if (el && content) {
+      const r = el.getBoundingClientRect();
+      const cr = content.getBoundingClientRect();
+      updateField(column, { free: true, freeX: ((r.left - cr.left) / cr.width) * 100, freeY: ((r.top - cr.top) / cr.height) * 100, freeW: (r.width / cr.width) * 100 });
+    } else {
+      updateField(column, { free: true, freeX: 10, freeY: 10, freeW: 50 });
+    }
+  };
+
   return (
     <div className="space-y-4">
+      {/* Placement: in-flow (auto) vs free (drag anywhere) */}
+      <div className="space-y-1.5">
+        <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Placement</label>
+        <div className="flex gap-1 p-1 bg-gray-100 rounded-lg">
+          {([
+            { free: false, label: 'In-flow' },
+            { free: true, label: 'Free (drag)' },
+          ]).map(({ free, label }) => (
+            <button
+              key={label}
+              onClick={() => setFieldFree(free)}
+              className={`flex-1 py-1.5 rounded-md text-xs font-bold transition-all ${
+                !!f.free === free ? 'bg-white text-dk-blue shadow-sm' : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        {f.free && <p className="text-[10px] text-gray-400">Drag this field anywhere on the label; drag its corner to resize.</p>}
+      </div>
+
       {/* Header / bold label text (falls back to the column name) */}
       <div className="space-y-1.5">
         <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Header (bold label)</label>

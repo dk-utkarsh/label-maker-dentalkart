@@ -350,56 +350,72 @@ export default function EditablePreview() {
     if (!key) return;
     const p = parseKey(key);
 
-    // Sticker & barcode/QR: dedicated FREE move (place anywhere). Listeners are attached at
-    // pointerdown (like the resize handler) so the live position updates reliably during the drag.
-    const freeEl: 'sticker' | 'code' | null =
-      p.kind === 'el' && (p.el === 'sticker' || p.el === 'code') ? p.el : null;
-    if (freeEl) {
-      e.preventDefault(); // images are natively draggable; this stops the browser drag that cancels pointers
+    // FREE move for any text field, the sticker, and the barcode/QR — place anywhere. Listeners are
+    // attached at pointerdown (like the resize handler) so live position updates reliably during the drag.
+    const freeKind: 'sticker' | 'code' | 'field' | null =
+      p.kind === 'field' ? 'field'
+        : (p.kind === 'el' && (p.el === 'sticker' || p.el === 'code')) ? p.el
+          : null;
+    if (freeKind) {
       const wrap = wrapRef.current;
       const content = wrap?.querySelector('.label-content') as HTMLElement | null;
       if (!content) return;
       const cr = content.getBoundingClientRect();
       const s = useStore.getState();
-      // Starting position (% of the label). For a not-yet-free barcode, capture its current rendered
-      // centre so switching to free placement doesn't make it jump.
+      const fieldCol = p.kind === 'field' ? p.column : '';
+      const dispCfg = s.editingLabelIdx !== null ? s.getEffectiveConfig(s.editingLabelIdx ?? s.previewIdx).config : s.config;
+      const fieldCfg = freeKind === 'field' ? dispCfg.find(c => c.column === fieldCol) : undefined;
+
+      // Starting position (% of the label). For a not-yet-free element, capture its current rendered
+      // position so switching to free placement doesn't make it jump.
       let startPos: { x: number; y: number };
-      if (freeEl === 'sticker') {
+      let captureW = 40;
+      if (freeKind === 'sticker') {
         startPos = { x: s.stickerX, y: s.stickerY };
-      } else if (s.barcodeFree) {
-        startPos = { x: s.barcodeX, y: s.barcodeY };
+      } else if (freeKind === 'code') {
+        if (s.barcodeFree) startPos = { x: s.barcodeX, y: s.barcodeY };
+        else {
+          const el = wrap?.querySelector('[data-element="code"]') as HTMLElement | null;
+          const r = el?.getBoundingClientRect();
+          startPos = r
+            ? { x: ((r.left + r.width / 2 - cr.left) / cr.width) * 100, y: ((r.top + r.height / 2 - cr.top) / cr.height) * 100 }
+            : { x: s.barcodeX, y: s.barcodeY };
+        }
       } else {
-        const codeEl = wrap?.querySelector('[data-element="code"]') as HTMLElement | null;
-        const br = codeEl?.getBoundingClientRect();
-        startPos = br
-          ? { x: ((br.left + br.width / 2 - cr.left) / cr.width) * 100, y: ((br.top + br.height / 2 - cr.top) / cr.height) * 100 }
-          : { x: s.barcodeX, y: s.barcodeY };
+        if (fieldCfg?.free) {
+          startPos = { x: fieldCfg.freeX ?? 10, y: fieldCfg.freeY ?? 10 };
+        } else {
+          const el = wrap?.querySelector(`[data-field-column="${CSS.escape(fieldCol)}"]`) as HTMLElement | null;
+          const r = el?.getBoundingClientRect();
+          startPos = r ? { x: ((r.left - cr.left) / cr.width) * 100, y: ((r.top - cr.top) / cr.height) * 100 } : { x: 10, y: 10 };
+          captureW = r ? (r.width / cr.width) * 100 : 40;
+        }
       }
       const sx0 = e.clientX, sy0 = e.clientY;
-      const pointerId = e.pointerId;
       let started = false;
       const prevUserSelect = document.body.style.userSelect;
-      try { wrap?.setPointerCapture(pointerId); } catch { /* ignore */ }
       const mv = (ev: PointerEvent) => {
         if (!started) {
           if (Math.hypot(ev.clientX - sx0, ev.clientY - sy0) < 4) return;
           started = true;
           draggingRef.current = true;
           document.body.style.userSelect = 'none';
-          if (freeEl === 'code') {
+          if (freeKind === 'code') {
             useStore.getState().setBarcodePos(startPos.x, startPos.y);
             useStore.getState().setBarcodeFree(true);
+          } else if (freeKind === 'field' && !fieldCfg?.free) {
+            useStore.getState().updateField(fieldCol, { free: true, freeX: startPos.x, freeY: startPos.y, freeW: captureW });
           }
         }
         justDraggedRef.current = true;
         const nx = Math.max(-10, Math.min(100, startPos.x + ((ev.clientX - sx0) / cr.width) * 100));
         const ny = Math.max(-10, Math.min(100, startPos.y + ((ev.clientY - sy0) / cr.height) * 100));
-        if (freeEl === 'sticker') useStore.getState().setStickerPos(nx, ny);
-        else useStore.getState().setBarcodePos(nx, ny);
+        if (freeKind === 'sticker') useStore.getState().setStickerPos(nx, ny);
+        else if (freeKind === 'code') useStore.getState().setBarcodePos(nx, ny);
+        else useStore.getState().updateField(fieldCol, { freeX: nx, freeY: ny });
       };
       const upp = () => {
         document.removeEventListener('pointermove', mv);
-        try { wrap?.releasePointerCapture(pointerId); } catch { /* ignore */ }
         draggingRef.current = false;
         document.body.style.userSelect = prevUserSelect;
         if (started) setSelectedKey(key);
@@ -410,7 +426,7 @@ export default function EditablePreview() {
       return;
     }
 
-    const draggable = p.kind === 'field' || (p.kind === 'el' && p.el === 'logo');
+    const draggable = p.kind === 'el' && p.el === 'logo';
     if (!draggable) return;
     const sx = e.clientX, sy = e.clientY;
     const move = (ev: PointerEvent) => {
@@ -440,15 +456,21 @@ export default function EditablePreview() {
     const st = useStore.getState();
     const sp = selectedKey ? parseKey(selectedKey) : null;
     const resizingCode = sp?.kind === 'el' && sp.el === 'code';
+    const resizingField = sp?.kind === 'field';
+    const fieldCol = sp?.kind === 'field' ? sp.column : '';
+    const dispCfg = st.editingLabelIdx !== null ? st.getEffectiveConfig(st.editingLabelIdx ?? st.previewIdx).config : st.config;
+    const fieldCfg = resizingField ? dispCfg.find(c => c.column === fieldCol) : undefined;
     const isQr = st.getEffectiveConfig(st.editingLabelIdx ?? st.previewIdx).codeType === 'qr';
-    const startSize = resizingCode ? (isQr ? st.qrSize : st.barcodeSize) : st.stickerSize;
+    const startSize = resizingField ? (fieldCfg?.freeW ?? 40) : resizingCode ? (isQr ? st.qrSize : st.barcodeSize) : st.stickerSize;
     draggingRef.current = true;
     const prevUserSelect = document.body.style.userSelect;
     document.body.style.userSelect = 'none';
     const onMove = (ev: PointerEvent) => {
       justDraggedRef.current = true;
       const dw = ((ev.clientX - startX) / cr.width) * 100;
-      if (resizingCode) {
+      if (resizingField) {
+        useStore.getState().updateField(fieldCol, { freeW: Math.max(5, Math.min(100, startSize + dw)) });
+      } else if (resizingCode) {
         const ns = Math.max(30, Math.min(200, startSize + dw * 3));
         if (isQr) useStore.getState().setQrSize(ns); else useStore.getState().setBarcodeSize(ns);
       } else {
@@ -466,10 +488,14 @@ export default function EditablePreview() {
   };
 
   const selParsed = selectedKey ? parseKey(selectedKey) : null;
-  const canDrag = selParsed && (selParsed.kind === 'field' || (selParsed.kind === 'el' && selParsed.el === 'logo'));
+  const canDrag = selParsed?.kind === 'el' && selParsed.el === 'logo';
   const isSticker = selParsed?.kind === 'el' && selParsed.el === 'sticker';
   const isFreeCode = selParsed?.kind === 'el' && selParsed.el === 'code' && store.barcodeFree;
-  const isResizable = isSticker || isFreeCode;
+  const selField = selParsed?.kind === 'field'
+    ? (editingLabelIdx !== null ? store.getEffectiveConfig(idx).config : store.config).find(c => c.column === selParsed.column)
+    : null;
+  const isFreeField = !!selField?.free;
+  const isResizable = isSticker || isFreeCode || isFreeField;
 
   // Popover header label + body per selection kind.
   const headerFor = () => {

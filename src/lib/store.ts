@@ -47,6 +47,11 @@ export interface FieldConfig {
   mergeUp?: boolean;
   mergeRight?: boolean;
   openBorder?: boolean;
+  /** Free placement: when true the field is positioned absolutely at freeX/freeY (out of the flow). */
+  free?: boolean;
+  freeX?: number;
+  freeY?: number;
+  freeW?: number;
 }
 
 /** Migrate legacy saved configs that have `bold` instead of `fontWeight` */
@@ -175,6 +180,7 @@ interface LabelState {
   setData: (data: Record<string, unknown>[], columns: string[]) => void;
   setConfig: (config: FieldConfig[]) => void;
   updateField: (column: string, updates: Partial<FieldConfig>) => void;
+  setFieldsFree: (positions: Record<string, { x: number; y: number; w: number }> | null) => void;
   setPreviewIdx: (idx: number) => void;
   setLogo: (logo: string | null) => void;
   setLogoPosition: (pos: LogoPosition) => void;
@@ -317,6 +323,24 @@ export const useStore = create<LabelState>((set, get) => ({
       }));
     }
   },
+  setFieldsFree: (positions) => {
+    const s = get();
+    const baseConfig = s.editingLabelIdx !== null
+      ? (s.labelOverrides[s.editingLabelIdx]?.config ?? s.config)
+      : s.config;
+    const newConfig = baseConfig.map((f) => {
+      if (!positions) return { ...f, free: false };
+      const p = positions[f.column];
+      return p ? { ...f, free: true, freeX: p.x, freeY: p.y, freeW: p.w } : f;
+    });
+    if (s.editingLabelIdx !== null) {
+      const override = s.labelOverrides[s.editingLabelIdx] || {};
+      set({ labelOverrides: { ...s.labelOverrides, [s.editingLabelIdx]: { ...override, config: newConfig } } });
+    } else {
+      set({ config: newConfig });
+    }
+  },
+
   setPreviewIdx: (previewIdx) => set({ previewIdx }),
   setLogo: (logo) => set({ logo }),
   setLogoPosition: (logoPosition) => set({ logoPosition }),

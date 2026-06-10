@@ -12,8 +12,22 @@ type DisplayItem =
 
 export default function ConfigSidebar() {
   const store = useStore();
-  const { setConfig, setBarcodeOrder, setBannerText, setOuterBorder, setPinFooter, columns, editingLabelIdx, previewIdx } = store;
+  const { setConfig, setBarcodeOrder, setBannerText, setOuterBorder, setPinFooter, setFieldsFree, columns, editingLabelIdx, previewIdx } = store;
   const idx = editingLabelIdx ?? previewIdx;
+
+  const makeAllFree = () => {
+    const content = document.querySelector('.label-content');
+    if (!content) return;
+    const cr = content.getBoundingClientRect();
+    const positions: Record<string, { x: number; y: number; w: number }> = {};
+    document.querySelectorAll('.label-content [data-field-column]').forEach((el) => {
+      const col = (el as HTMLElement).dataset.fieldColumn;
+      if (!col) return;
+      const r = el.getBoundingClientRect();
+      positions[col] = { x: ((r.left - cr.left) / cr.width) * 100, y: ((r.top - cr.top) / cr.height) * 100, w: (r.width / cr.width) * 100 };
+    });
+    setFieldsFree(positions);
+  };
 
   const effective = store.getEffectiveConfig(idx);
   const config = editingLabelIdx !== null ? effective.config : store.config;
@@ -119,6 +133,26 @@ export default function ConfigSidebar() {
             >
               <span className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${store.pinFooter ? 'translate-x-5' : ''}`} />
             </button>
+          </div>
+
+          {/* Element Layout — make every field freely movable, or reset to the auto layout */}
+          <div className="space-y-1.5">
+            <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Element Layout</label>
+            <div className="flex gap-2">
+              <button
+                onClick={makeAllFree}
+                className="flex-1 py-1.5 rounded-lg bg-dk-blue-light text-dk-blue text-[11px] font-bold border border-dk-blue/20 hover:bg-dk-blue hover:text-white transition-colors"
+              >
+                Make all free
+              </button>
+              <button
+                onClick={() => setFieldsFree(null)}
+                className="flex-1 py-1.5 rounded-lg bg-gray-50 text-gray-600 text-[11px] font-bold border border-gray-200 hover:bg-gray-100 transition-colors"
+              >
+                Reset to auto
+              </button>
+            </div>
+            <p className="text-[10px] text-gray-400">Free = drag any element anywhere. Auto = the structured layout.</p>
           </div>
 
           {/* Barcode / QR controls (shared with the inline popover) */}

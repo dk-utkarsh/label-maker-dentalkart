@@ -115,7 +115,7 @@ export default function LabelPreview({ overrideIdx }: { overrideIdx?: number } =
     if (!hasCode) return [];
     const fields: typeof activeFields = [];
     for (let i = barcodeOrder; i < config.length; i++) {
-      if (config[i].sameRow && config[i].role !== 'hidden') {
+      if (config[i].sameRow && config[i].role !== 'hidden' && !config[i].free) {
         fields.push(config[i]);
       } else {
         break;
@@ -128,9 +128,10 @@ export default function LabelPreview({ overrideIdx }: { overrideIdx?: number } =
 
   if (!data.length) return null;
 
-  const titles = activeFields.filter(f => f.role === 'title' && !codeRowColumns.has(f.column));
-  const bodies = activeFields.filter(f => f.role === 'body' && !codeRowColumns.has(f.column));
-  const footers = activeFields.filter(f => f.role === 'footer' && !codeRowColumns.has(f.column));
+  const freeFields = activeFields.filter(f => f.free);
+  const titles = activeFields.filter(f => f.role === 'title' && !codeRowColumns.has(f.column) && !f.free);
+  const bodies = activeFields.filter(f => f.role === 'body' && !codeRowColumns.has(f.column) && !f.free);
+  const footers = activeFields.filter(f => f.role === 'footer' && !codeRowColumns.has(f.column) && !f.free);
 
   const groupRows = (fields: FieldConfig[]) => {
     const rows: FieldConfig[][] = [];
@@ -164,8 +165,16 @@ export default function LabelPreview({ overrideIdx }: { overrideIdx?: number } =
           wordBreak: 'break-word',
           whiteSpace: 'pre-wrap',
           textTransform: rich && f.uppercase ? 'uppercase' : undefined,
-          width: isSameRow ? undefined : '100%',
-          flex: isSameRow ? 1 : undefined,
+          ...(f.free ? {
+            position: 'absolute' as const,
+            left: `${f.freeX ?? 10}%`,
+            top: `${f.freeY ?? 10}%`,
+            width: `${f.freeW ?? 40}%`,
+            zIndex: 4,
+          } : {
+            width: isSameRow ? undefined : '100%',
+            flex: isSameRow ? 1 : undefined,
+          }),
           border: f.border ? '1px solid #ccc' : 'none',
           padding: f.border ? `${borderPad * 0.6}px ${borderPad}px` : '0',
         }}
@@ -463,23 +472,30 @@ export default function LabelPreview({ overrideIdx }: { overrideIdx?: number } =
           </div>
         )}
 
-        {/* Sticker — free-floating overlay (placed/resized by dragging on the label) */}
+        {/* Free-positioned fields (placed/resized by dragging on the label) */}
+        {freeFields.map(f => renderField(f, f.role))}
+
+        {/* Sticker — free-floating overlay (placed/resized by dragging on the label).
+            The data-element target is the wrapper div; the img has pointer-events:none so the
+            press lands on the div (avoids the native-image-drag / pointer quirks of an <img>). */}
         {sticker && (
-          <img
+          <div
             data-element="sticker"
-            src={sticker}
-            alt="Sticker"
-            draggable={false}
             style={{
               position: 'absolute',
               left: `${stickerX}%`,
               top: `${stickerY}%`,
               width: `${stickerSize}%`,
-              height: 'auto',
-              objectFit: 'contain',
               zIndex: 6,
             }}
-          />
+          >
+            <img
+              src={sticker}
+              alt="Sticker"
+              draggable={false}
+              style={{ width: '100%', height: 'auto', objectFit: 'contain', display: 'block', pointerEvents: 'none' }}
+            />
+          </div>
         )}
       </div>
     </div>
