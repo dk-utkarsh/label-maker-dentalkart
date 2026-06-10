@@ -394,6 +394,7 @@ export default function LabelPreview({ overrideIdx }: { overrideIdx?: number } =
           padding: `${pad}px`,
           backgroundColor: '#ffffff',
           position: 'relative',
+          isolation: 'isolate',
         }}
         className={`label-content shadow-2xl rounded-sm flex flex-col overflow-hidden ${outerBorder ? 'border-2' : ''}`}
       >
@@ -475,27 +476,55 @@ export default function LabelPreview({ overrideIdx }: { overrideIdx?: number } =
         {/* Free-positioned fields (placed/resized by dragging on the label) */}
         {freeFields.map(f => renderField(f, f.role))}
 
-        {/* Sticker — free-floating overlay (placed/resized by dragging on the label).
-            The data-element target is the wrapper div; the img has pointer-events:none so the
-            press lands on the div (avoids the native-image-drag / pointer quirks of an <img>). */}
+        {/* Sticker — TWO synced layers so the image stays visually BEHIND all label content while
+            keeping its original click/drag/resize behavior 100% unchanged:
+              • Visual layer (zIndex:-1): the actual image, painted behind the text. The container's
+                `isolation: isolate` keeps this -1 layer above the white card background so it stays
+                visible. pointer-events:none — it never intercepts anything.
+              • Hit layer (zIndex:6, transparent): the drag/select target (data-element="sticker"),
+                sized to the image via a visibility:hidden copy. This occupies exactly the spot the
+                sticker always held in the stacking order, so selecting/dragging/resizing work just
+                like before. Being transparent it never visually covers the text, and its hidden img
+                renders nothing in exports — so captures show the image behind the text.
+            Both layers read the same stickerX/Y/Size, so they stay perfectly aligned. */}
         {sticker && (
-          <div
-            data-element="sticker"
-            style={{
-              position: 'absolute',
-              left: `${stickerX}%`,
-              top: `${stickerY}%`,
-              width: `${stickerSize}%`,
-              zIndex: 6,
-            }}
-          >
-            <img
-              src={sticker}
-              alt="Sticker"
-              draggable={false}
-              style={{ width: '100%', height: 'auto', objectFit: 'contain', display: 'block', pointerEvents: 'none' }}
-            />
-          </div>
+          <>
+            <div
+              aria-hidden
+              style={{
+                position: 'absolute',
+                left: `${stickerX}%`,
+                top: `${stickerY}%`,
+                width: `${stickerSize}%`,
+                zIndex: -1,
+                pointerEvents: 'none',
+              }}
+            >
+              <img
+                src={sticker}
+                alt=""
+                draggable={false}
+                style={{ width: '100%', height: 'auto', objectFit: 'contain', display: 'block', pointerEvents: 'none' }}
+              />
+            </div>
+            <div
+              data-element="sticker"
+              style={{
+                position: 'absolute',
+                left: `${stickerX}%`,
+                top: `${stickerY}%`,
+                width: `${stickerSize}%`,
+                zIndex: 6,
+              }}
+            >
+              <img
+                src={sticker}
+                alt="Sticker"
+                draggable={false}
+                style={{ width: '100%', height: 'auto', objectFit: 'contain', display: 'block', visibility: 'hidden', pointerEvents: 'none' }}
+              />
+            </div>
+          </>
         )}
       </div>
     </div>
